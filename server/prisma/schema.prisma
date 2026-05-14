@@ -1,0 +1,199 @@
+// Prisma Schema — TFG App Móvil de Geolocalización y Chat en Tiempo Real
+// Generado: 2026-05-14
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+//  USUARIO Y AUTENTICACIÓN
+// ─────────────────────────────────────────────
+
+model User {
+  id           Int      @id @default(autoincrement())
+  deviceToken  String   @unique @map("device_token")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relaciones
+  profile      Profile?
+  connectedStats ConnectedStats?
+
+  sentRequests     FriendRequest[] @relation("SentRequests")
+  receivedRequests FriendRequest[] @relation("ReceivedRequests")
+
+  friendshipsA Friendship[] @relation("FriendshipUserA")
+  friendshipsB Friendship[] @relation("FriendshipUserB")
+
+  chatMemberships ChatMember[]
+  sentMessages    Message[]
+
+  createdGroups GroupChat[] @relation("GroupCreator")
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────
+//  PERFIL
+// ─────────────────────────────────────────────
+
+model Profile {
+  id        Int     @id @default(autoincrement())
+  userId    Int     @unique @map("user_id")
+  name      String  @default("")
+  message   String  @default("")
+  imageUrl  String? @map("image_url")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Los grupos también tienen perfil
+  groupChat GroupChat?
+
+  @@map("profiles")
+}
+
+// ─────────────────────────────────────────────
+//  ESTADO DE CONEXIÓN (almacenado en Redis,
+//  este modelo se usa solo para migraciones
+//  o como referencia — los datos reales
+//  viven en Redis como JSON)
+// ─────────────────────────────────────────────
+
+model ConnectedStats {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @unique @map("user_id")
+  range       Float    // metros de visibilidad
+  automDisc   Int      @map("autom_disc") // segundos hasta desconexión automática
+  latitude    Float
+  longitude   Float
+  connectedAt DateTime @default(now()) @map("connected_at")
+  expiresAt   DateTime @map("expires_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("connected_stats")
+}
+
+// ─────────────────────────────────────────────
+//  AMISTADES Y SOLICITUDES
+// ─────────────────────────────────────────────
+
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model FriendRequest {
+  id         Int                 @id @default(autoincrement())
+  senderId   Int                 @map("sender_id")
+  receiverId Int                 @map("receiver_id")
+  status     FriendRequestStatus @default(PENDING)
+  createdAt  DateTime            @default(now()) @map("created_at")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
+
+  sender   User @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+  @@map("friend_requests")
+}
+
+model Friendship {
+  id        Int      @id @default(autoincrement())
+  userIdA   Int      @map("user_id_a")
+  userIdB   Int      @map("user_id_b")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  userA User @relation("FriendshipUserA", fields: [userIdA], references: [id], onDelete: Cascade)
+  userB User @relation("FriendshipUserB", fields: [userIdB], references: [id], onDelete: Cascade)
+
+  @@unique([userIdA, userIdB])
+  @@map("friendships")
+}
+
+// ─────────────────────────────────────────────
+//  CHAT
+// ─────────────────────────────────────────────
+
+model Chat {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  members  ChatMember[]
+  messages Message[]
+
+  groupChat   GroupChat?
+  privateChat PrivateChat?
+
+  @@map("chats")
+}
+
+enum ChatMemberRole {
+  MEMBER
+  ADMIN
+}
+
+model ChatMember {
+  id       Int            @id @default(autoincrement())
+  userId   Int            @map("user_id")
+  chatId   Int            @map("chat_id")
+  role     ChatMemberRole @default(MEMBER)
+  joinedAt DateTime       @default(now()) @map("joined_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, chatId])
+  @@map("chat_members")
+}
+
+model Message {
+  id       Int      @id @default(autoincrement())
+  chatId   Int      @map("chat_id")
+  senderId Int      @map("sender_id")
+  content  String
+  seen     Boolean  @default(false)
+  sentAt   DateTime @default(now()) @map("sent_at")
+
+  chat   Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender User @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+// ─────────────────────────────────────────────
+//  TIPOS DE CHAT
+// ─────────────────────────────────────────────
+
+model GroupChat {
+  id              Int     @id @default(autoincrement())
+  chatId          Int     @unique @map("chat_id")
+  profileId       Int     @unique @map("profile_id")
+  createdById     Int     @map("created_by_id")
+  editableName    Boolean @default(false) @map("editable_name")
+  editableMessage Boolean @default(false) @map("editable_message")
+  editableImage   Boolean @default(false) @map("editable_image")
+  latitude        Float
+  longitude       Float
+
+  chat      Chat    @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  createdBy User    @relation("GroupCreator", fields: [createdById], references: [id])
+
+  @@map("group_chats")
+}
+
+model PrivateChat {
+  id         Int @id @default(autoincrement())
+  chatId     Int @unique @map("chat_id")
+  maxMembers Int @default(2) @map("max_members")
+
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@map("private_chats")
+}

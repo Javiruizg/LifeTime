@@ -1,0 +1,19 @@
+{
+  "name": "tfg-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install --prefix server && npm install --prefix app",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f",
+    "backend:install": "npm install --prefix server",
+    "backend:dev": "npm --prefix server run dev",
+    "backend:prisma": "npm --prefix server run prisma:generate",
+    "frontend:install": "npm install --prefix app",
+    "frontend:start": "npm --prefix app run start",
+    "frontend:android": "npm --prefix app run android",
+    "frontend:ios": "npm --prefix app run ios",
+    "frontend:web": "npm --prefix app run web"
+  }
+}
