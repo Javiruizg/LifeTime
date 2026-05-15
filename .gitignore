@@ -15,6 +15,11 @@ uploads/
 dist/
 build/
 web-build/
+
+# Test coverage
+coverage/
+server/coverage/
+app/coverage/
 expo-env.d.ts
 *.tsbuildinfo
 
@@ -51,9 +56,6 @@ yarn-error.*
 *.swp
 *.swo
 *~
-
-# Agent instructions
-AGENTS.md
 
 # Temporary files
 *.tmp
