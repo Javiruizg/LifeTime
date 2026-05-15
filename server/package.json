@@ -7,7 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "prisma:generate": "prisma generate",
     "test": "jest --coverage",
-    "test:ci": "jest --coverage --ci --forceComplete"
+    "test:ci": "jest --coverage --ci"
   },
   "keywords": [],
   "author": "",

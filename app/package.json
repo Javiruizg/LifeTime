@@ -8,7 +8,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "test": "jest --coverage",
-    "test:ci": "jest --coverage --ci --forceComplete"
+    "test:ci": "jest --coverage --ci"
   },
   "dependencies": {
     "@react-navigation/bottom-tabs": "^7.16.1",
