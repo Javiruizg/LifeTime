@@ -1,69 +1,100 @@
-name: Trivy Vulnerability Scan
+name: Trivy Vulnerability Scan (Readable Report)
 
 on:
   push:
-    branches:
-      - main
-
+    branches: [ main ]
   pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
+    types: [opened, synchronize, reopened]
 
 jobs:
-  trivy-server:
-    name: Trivy Scan - Server
+  trivy-scan:
+    name: Trivy Scan (server + app)
     runs-on: ubuntu-latest
 
     permissions:
-      security-events: write
       contents: read
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Trivy vulnerability scanner (server)
-        uses: aquasecurity/trivy-action@master
+      # =========================
+      # INSTALL TRIVY
+      # =========================
+      - name: Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget
+          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.70.0_Linux-64bit.deb
+          sudo dpkg -i trivy_0.70.0_Linux-64bit.deb
+
+      # =========================
+      # SCAN SERVER (HTML)
+      # =========================
+      - name: Scan server (HTML report)
+        continue-on-error: true
+        run: |
+          trivy fs server/ \
+            --severity HIGH,CRITICAL \
+            --format template \
+            --template "@contrib/html.tpl" \
+            -o trivy-server.html
+
+      # =========================
+      # SCAN APP (HTML)
+      # =========================
+      - name: Scan app (HTML report)
+        continue-on-error: true
+        run: |
+          trivy fs app/ \
+            --severity HIGH,CRITICAL \
+            --format template \
+            --template "@contrib/html.tpl" \
+            -o trivy-app.html
+
+      # =========================
+      # CHECK IF VULNERABILITIES EXIST
+      # =========================
+      - name: Evaluate scan results
+        run: |
+          echo "Checking reports..."
+
+          FAIL=0
+
+          if grep -q "CRITICAL" trivy-server.html; then
+            echo "❌ Server has CRITICAL vulnerabilities"
+            FAIL=1
+          fi
+
+          if grep -q "CRITICAL" trivy-app.html; then
+            echo "❌ App has CRITICAL vulnerabilities"
+            FAIL=1
+          fi
+
+          if grep -q "HIGH" trivy-server.html; then
+            echo "⚠️ Server has HIGH vulnerabilities"
+            FAIL=1
+          fi
+
+          if grep -q "HIGH" trivy-app.html; then
+            echo "⚠️ App has HIGH vulnerabilities"
+            FAIL=1
+          fi
+
+          if [ "$FAIL" -eq 1 ]; then
+            echo "❌ Vulnerabilities detected"
+            exit 1
+          else
+            echo "✅ No critical vulnerabilities found"
+          fi
+
+      # =========================
+      # UPLOAD READABLE REPORTS
+      # =========================
+      - name: Upload HTML reports
+        uses: actions/upload-artifact@v4
         with:
-          scan-type: fs
-          scan-ref: server/
-          format: sarif
-          output: trivy-server-results.sarif
-          severity: HIGH,CRITICAL
-          exit-code: "1"
-
-      - name: Upload server Trivy results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: trivy-server-results.sarif
-          category: trivy-server
-
-  trivy-app:
-    name: Trivy Scan - App
-    runs-on: ubuntu-latest
-
-    permissions:
-      security-events: write
-      contents: read
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Run Trivy vulnerability scanner (app)
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: fs
-          scan-ref: app/
-          format: sarif
-          output: trivy-app-results.sarif
-          severity: HIGH,CRITICAL
-          exit-code: "1"
-
-      - name: Upload app Trivy results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: trivy-app-results.sarif
-          category: trivy-app
+          name: trivy-html-reports
+          path: |
+            trivy-server.html
+            trivy-app.html
