@@ -51,6 +51,11 @@ jobs:
         working-directory: app
         run: npm run test:ci
 
+      - name: Fix LCOV paths for SonarCloud
+        run: |
+          sed -i 's|^SF:|SF:server/|' server/coverage/lcov.info
+          sed -i 's|^SF:|SF:app/|' app/coverage/lcov.info
+
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@2f77a1ec69fb1d595b06f35ab27e97605bdef703
         env:
