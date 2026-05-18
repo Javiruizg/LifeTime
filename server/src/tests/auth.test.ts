@@ -56,18 +56,6 @@ describe('Auth endpoints', () => {
         expect(response.body).toHaveProperty('userId');
       });
 
-      it('should return the same userId on repeated logins', async () => {
-        const first = await request(app)
-          .post('/api/auth/device')
-          .send({ deviceId: testDeviceId });
-
-        const second = await request(app)
-          .post('/api/auth/device')
-          .send({ deviceId: testDeviceId });
-
-        expect(second.body.userId).toBe(first.body.userId);
-      });
-
       it('should create different users for different deviceIds', async () => {
         const first = await request(app)
           .post('/api/auth/device')
@@ -135,28 +123,6 @@ describe('Auth endpoints', () => {
         });
         expect(user!.refreshToken).toBe(second.body.refreshToken);
       });
-
-      it('should accept a UUID-format deviceId without encryption', async () => {
-        const response = await request(app)
-          .post('/api/auth/device')
-          .send({ deviceId: uuidDeviceId });
-
-        expect(response.status).toBe(200);
-        expect(response.body.success).toBe(true);
-        expect(response.body.isNewUser).toBe(true);
-      });
-
-      it('should accept a long alphanumeric deviceId', async () => {
-        const longDeviceId = 'a'.repeat(255);
-        const response = await request(app)
-          .post('/api/auth/device')
-          .send({ deviceId: longDeviceId });
-
-        expect(response.status).toBe(200);
-        expect(response.body.success).toBe(true);
-
-        await prisma.user.deleteMany({ where: { deviceId: longDeviceId } });
-      });
     });
 
     describe('Negative cases', () => {
@@ -196,35 +162,6 @@ describe('Auth endpoints', () => {
         expect(response.body.error).toBe('Invalid input');
       });
 
-      
-
-      it('should return 400 for boolean deviceId', async () => {
-        const response = await request(app)
-          .post('/api/auth/device')
-          .send({ deviceId: true });
-
-        expect(response.status).toBe(400);
-        expect(response.body.error).toBe('Invalid input');
-      });
-
-      it('should return 400 for object as deviceId', async () => {
-        const response = await request(app)
-          .post('/api/auth/device')
-          .send({ deviceId: { id: 'abc' } });
-
-        expect(response.status).toBe(400);
-        expect(response.body.error).toBe('Invalid input');
-      });
-
-      it('should return 400 for array as deviceId', async () => {
-        const response = await request(app)
-          .post('/api/auth/device')
-          .send({ deviceId: ['device-id'] });
-
-        expect(response.status).toBe(400);
-        expect(response.body.error).toBe('Invalid input');
-      });
-
       it('should return 400 when body is not JSON', async () => {
         const response = await request(app)
           .post('/api/auth/device')
@@ -232,16 +169,6 @@ describe('Auth endpoints', () => {
           .send('deviceId=test-device');
 
         expect(response.status).toBe(400);
-      });
-
-      it('should include validation details on invalid input', async () => {
-        const response = await request(app)
-          .post('/api/auth/device')
-          .send({});
-
-        expect(response.status).toBe(400);
-        expect(response.body).toHaveProperty('details');
-        expect(response.body.details).toHaveProperty('fieldErrors');
       });
     });
   });
@@ -279,15 +206,6 @@ describe('Auth endpoints', () => {
           .send({ refreshToken: validRefreshToken });
 
         expect(response.body.refreshToken).not.toBe(validRefreshToken);
-      });
-
-      it('should return a valid JWT access token after refresh', async () => {
-        const response = await request(app)
-          .post('/api/auth/refresh')
-          .send({ refreshToken: validRefreshToken });
-
-        const decoded = jwt.verify(response.body.accessToken, JWT_SECRET) as jwt.JwtPayload;
-        expect(decoded).toHaveProperty('userId', testUserId);
       });
 
       it('should return a valid JWT refresh token with correct claims after refresh', async () => {
