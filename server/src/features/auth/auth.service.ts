@@ -55,7 +55,7 @@ export async function loginOrRegister(deviceId: string): Promise<AuthTokens & { 
       },
     });
     console.log(`User created with ID: ${user.id}`);
-  } else {
+  } else if (user) {
     console.log(`Existing user found, ID: ${user.id}, regenerating tokens...`);
   }
   
