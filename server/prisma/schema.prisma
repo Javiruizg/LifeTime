@@ -16,7 +16,8 @@ datasource db {
 
 model User {
   id           Int      @id @default(autoincrement())
-  deviceToken  String   @unique @map("device_token")
+  deviceId     String   @unique @map("device_id")
+  refreshToken String?  @map("refresh_token")
   createdAt    DateTime @default(now()) @map("created_at")
 
   // Relaciones

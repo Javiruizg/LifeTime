@@ -1,0 +1,62 @@
+import { useState, useEffect } from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import AuthLoadingScreen from '../screens/AuthLoadingScreen';
+import HomeScreen from '../screens/HomeScreen';
+import { getAccessToken } from '../features/auth/auth.service';
+
+export type RootStackParamList = {
+  AuthLoading: undefined;
+  Home: undefined;
+};
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
+
+export default function AppNavigator() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    checkExistingSession();
+  }, []);
+
+const checkExistingSession = async () => {
+    try {
+      const token = await getAccessToken();
+      setIsAuthenticated(!!token);
+    } catch {
+      setIsAuthenticated(false);
+    }
+  };
+
+  const handleAuthComplete = () => {
+    setIsAuthenticated(true);
+  };
+
+  const handleAuthError = () => {
+    setIsAuthenticated(false);
+  };
+
+  if (isAuthenticated === null) {
+    return null;
+  }
+
+  return (
+    <NavigationContainer>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {isAuthenticated ? (
+          <Stack.Screen name="Home" component={HomeScreen} />
+        ) : (
+          <Stack.Screen name="AuthLoading">
+            {(props) => (
+              <AuthLoadingScreen
+                {...props}
+                onAuthComplete={handleAuthComplete}
+                onError={handleAuthError}
+              />
+            )}
+          </Stack.Screen>
+        )}
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}

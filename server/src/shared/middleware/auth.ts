@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 export interface AuthenticatedRequest extends Request {
   user?: {
     id: number;
-    deviceToken: string;
+    deviceId: string;
   };
 }
 
@@ -13,6 +13,8 @@ export interface AuthenticatedRequest extends Request {
  * (Bearer <token>) or x-device-token header. Looks up the user in Prisma
  * and attaches it to req.user.
  */
+
+// TODO: Review this, I think this file will be removed when the proper middleware for validating access tokens is implemented
 export async function authenticateDeviceToken(
   req: AuthenticatedRequest,
   res: Response,
@@ -32,8 +34,8 @@ export async function authenticateDeviceToken(
 
   try {
     const user = await prisma.user.findUnique({
-      where: { deviceToken: token },
-      select: { id: true, deviceToken: true },
+      where: { deviceId: token },
+      select: { id: true, deviceId: true },
     });
 
     if (!user) {
