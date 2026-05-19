@@ -5,12 +5,12 @@ import { prisma } from '../shared/lib/prisma';
 export function setupSocket(httpServer: HttpServer): SocketIOServer {
   const io = new SocketIOServer(httpServer, {
     cors: {
-      origin: '*', // TODO: restringir en producción
+      origin: '*', // TODO: Restrict this in production
       methods: ['GET', 'POST'],
     },
   });
 
-  // Middleware de autenticación WebSocket
+  // TODO: This code will be rewritten once we have a proper auth system
   io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token as string | undefined;
 
@@ -20,7 +20,7 @@ export function setupSocket(httpServer: HttpServer): SocketIOServer {
 
     try {
       const user = await prisma.user.findUnique({
-        where: { deviceToken: token },
+        where: { deviceId: token },
         include: { profile: true },
       });
 
@@ -28,7 +28,6 @@ export function setupSocket(httpServer: HttpServer): SocketIOServer {
         return next(new Error('Unauthorized: invalid device token'));
       }
 
-      // Añadir datos del usuario al socket
       (socket as any).userId = user.id;
       (socket as any).userProfile = user.profile;
 
@@ -40,16 +39,14 @@ export function setupSocket(httpServer: HttpServer): SocketIOServer {
 
   io.on('connection', (socket) => {
     const userId = (socket as any).userId as number;
-    console.log(`🔌 User ${userId} connected via WebSocket`);
+    console.log(`User ${userId} connected via WebSocket`);
 
-    // Unir al room personal del usuario (para mensajes privados)
     socket.join(`user:${userId}`);
 
     socket.on('disconnect', () => {
-      console.log(`🔌 User ${userId} disconnected`);
+      console.log(`User ${userId} disconnected`);
     });
 
-    // TODO: eventos del mapa, chat, etc. — se implementarán en sus features
   });
 
   return io;

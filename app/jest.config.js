@@ -14,7 +14,7 @@ module.exports = {
   coverageDirectory: 'coverage',
   coverageReporters: ['lcov', 'text'],
   transformIgnorePatterns: [
-    'node_modules/(?!((jest-)?react-native|@react-native|expo(nent)?|@expo(nent)?/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg))',
+    'node_modules/(?!((jest-)?react-native|@react-native|expo(nent)?|@expo(nent)?/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@react-navigation/.*|react-navigation))',
   ],
   setupFiles: ['./jest.setup.js'],
 };

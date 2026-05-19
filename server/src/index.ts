@@ -8,10 +8,9 @@ import redis from './shared/lib/redis';
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 
 async function main() {
-  // Conectar Redis
+
   await redis.connect();
 
-  // Conectar Prisma (valida la conexión con DB)
   try {
     await prisma.$connect();
     console.log('✅ PostgreSQL connected');
@@ -23,17 +22,17 @@ async function main() {
     console.error('⚠️ Continuing without database connection — set DATABASE_URL and run migrations to enable DB features.');
   }
 
-  // Crear servidor HTTP + WebSocket
+  // Create HTTP server and setup WebSocket
   const httpServer = http.createServer(app);
   const _io = setupSocket(httpServer);
 
   httpServer.listen(PORT, () => {
-    console.log(`🚀 Server running at http://localhost:${PORT}`);
-    console.log(`🩺 Health: http://localhost:${PORT}/health`);
+    console.log(`Server running at http://localhost:${PORT}`);
+    console.log(`Health: http://localhost:${PORT}/health`);
   });
 }
 
 main().catch((err) => {
-  console.error('❌ Fatal error during startup:', err);
+  console.error('Fatal error during startup:', err);
   process.exit(1);
 });

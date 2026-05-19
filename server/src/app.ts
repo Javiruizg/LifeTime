@@ -2,36 +2,33 @@ import express, { type Request, type Response, type NextFunction } from 'express
 import cors from 'cors';
 import helmet from 'helmet';
 import path from 'path';
+import authRouter from './features/auth/auth.routes';
 import uploadRouter from './features/upload/upload.routes';
 
 const app = express();
 
-// ─── Middleware globales ──────────────────────────────────
-app.use(helmet()); // Seguridad HTTP headers
-app.use(cors()); // Permitir CORS (ajustar configuración según necesidades)
-app.use(express.json()); // Parsear JSON en body de requests
-app.use(express.urlencoded({ extended: true })); // Parsear URL-encoded bodies (para formularios)
+// Global middlewares
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Servir imágenes subidas de forma estática
+// Serve static files from the uploads directory
 const uploadsDir = process.env.UPLOADS_DIR ?? 'uploads';
 app.use('/uploads', express.static(path.resolve(uploadsDir)));
 
-// ─── Health check ─────────────────────────────────────────
+// Health check
 app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// ─── Features (se añadirán según se implementen) ──────────
-// app.use('/api/auth', authRouter);
-// app.use('/api/profile', profileRouter);
-// app.use('/api/friends', friendsRouter);
-// app.use('/api/map', mapRouter);
-// app.use('/api/chat', chatRouter);
+// API routes
+app.use('/api/auth', authRouter);
 app.use('/api/upload', uploadRouter);
 
-// ─── Error handler global ─────────────────────────────────
+// Error handler global
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  console.error('❌ Unhandled error:', err.message);
+  console.error('Unhandled error:', err.message);
   res.status(500).json({ error: 'Internal server error' });
 });
 
