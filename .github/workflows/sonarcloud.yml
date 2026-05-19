@@ -43,6 +43,13 @@ jobs:
         working-directory: app
         run: npm ci --legacy-peer-deps
 
+      - name: Wait for PostgreSQL to be ready
+        run: |
+          until pg_isready -h localhost -p 5432; do
+            echo "Esperando a que la base de datos esté lista..."
+            sleep 2
+          done
+
       - name: Push Prisma Schema to Test DB
         working-directory: server
         env:
