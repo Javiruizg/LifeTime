@@ -45,7 +45,7 @@ jobs:
 
       - name: Wait for PostgreSQL to be ready
         run: |
-          until pg_isready -h localhost -p 5432; do
+          until pg_isready -h localhost -p 5433; do
             echo "Esperando a que la base de datos esté lista..."
             sleep 2
           done
@@ -53,14 +53,14 @@ jobs:
       - name: Push Prisma Schema to Test DB
         working-directory: server
         env:
-          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/lifetime_test_db?schema=public
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5433/lifetime_test_db?schema=public
         run: npx prisma db push
 
       - name: Run server tests with coverage
         working-directory: server
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/lifetime_test_db?schema=public
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5433/lifetime_test_db?schema=public
         run: npm run test:ci
 
       - name: Run app tests with coverage
