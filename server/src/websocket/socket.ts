@@ -1,52 +1,47 @@
 import { Server as SocketIOServer } from 'socket.io';
 import type { Server as HttpServer } from 'http';
-import { prisma } from '../shared/lib/prisma';
+import { verifyAccessToken, TokenError } from '../shared/lib/jwt';
+import type { SocketData } from '../shared/types/auth';
+
+const SOCKET_AUTH_ERROR = 'Unauthorized: missing token';
 
 export function setupSocket(httpServer: HttpServer): SocketIOServer {
-  const io = new SocketIOServer(httpServer, {
+  const io = new SocketIOServer<SocketData>(httpServer, {
     cors: {
-      origin: '*', // TODO: Restrict this in production
+      origin: '*',
       methods: ['GET', 'POST'],
     },
   });
 
-  // TODO: This code will be rewritten once we have a proper auth system
-  io.use(async (socket, next) => {
+  io.use((socket, next) => {
     const token = socket.handshake.auth?.token as string | undefined;
 
     if (!token) {
-      return next(new Error('Unauthorized: missing device token'));
+      return next(new Error(SOCKET_AUTH_ERROR));
     }
 
     try {
-      const user = await prisma.user.findUnique({
-        where: { deviceId: token },
-        include: { profile: true },
-      });
-
-      if (!user) {
-        return next(new Error('Unauthorized: invalid device token'));
-      }
-
-      (socket as any).userId = user.id;
-      (socket as any).userProfile = user.profile;
-
+      const decoded = verifyAccessToken(token);
+      socket.data.userId = decoded.userId;
       next();
     } catch (err) {
-      next(new Error('Internal server error'));
+      if (err instanceof TokenError && err.code === 'TOKEN_EXPIRED') {
+        return next(new Error('Unauthorized: token expired'));
+      }
+      if (err instanceof TokenError && err.code === 'INVALID_TYPE') {
+        return next(new Error('Unauthorized: invalid token type'));
+      }
+      next(new Error('Unauthorized: invalid or malformed token'));
     }
   });
 
   io.on('connection', (socket) => {
-    const userId = (socket as any).userId as number;
-    console.log(`User ${userId} connected via WebSocket`);
-
-    socket.join(`user:${userId}`);
+    console.log(`User ${socket.data.userId} connected via WebSocket`);
+    socket.join(`user:${socket.data.userId}`);
 
     socket.on('disconnect', () => {
-      console.log(`User ${userId} disconnected`);
+      console.log(`User ${socket.data.userId} disconnected`);
     });
-
   });
 
   return io;

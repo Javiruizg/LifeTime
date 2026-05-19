@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { StorageAdapter } from './storage.interface';
+import { StorageAdapter } from '../../../shared/types/storage.interface';
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR ?? 'uploads';
 const BASE_PATH = path.resolve(UPLOADS_DIR);

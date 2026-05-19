@@ -25,7 +25,8 @@ export class UploadService {
     buffer: Buffer,
     mimetype: string
   ): Promise<string> {
-    // Validation
+
+    console.log(`Uploading profile image for user ${userId}`);
     if (!ALLOWED_MIME_TYPES.includes(mimetype)) {
       throw new UploadError(
         `Invalid file type. Allowed: ${ALLOWED_MIME_TYPES.join(', ')}`,
@@ -81,6 +82,7 @@ export class UploadService {
       data: { imageUrl },
     });
 
+    console.log(`Profile image uploaded successfully for user ${userId}`);
     return imageUrl;
   }
 
@@ -88,6 +90,7 @@ export class UploadService {
    * Delete a user's profile avatar.
    */
   async deleteProfileImage(userId: number): Promise<void> {
+    console.log(`Deleting profile image for user ${userId}`);
     const profile = await prisma.profile.findUnique({
       where: { userId },
       select: { imageUrl: true },

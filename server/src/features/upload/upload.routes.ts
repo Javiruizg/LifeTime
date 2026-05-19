@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { uploadProfile, deleteProfile } from './upload.controller';
-import { authenticateDeviceToken } from '../../shared/middleware/auth';
+import { authenticateJWT } from '../../shared/middleware/jwtAuth';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -15,11 +15,11 @@ const router = Router();
 
 router.post(
   '/profile',
-  authenticateDeviceToken,
+  authenticateJWT,
   upload.single('image'),
   uploadProfile
 );
 
-router.delete('/profile', authenticateDeviceToken, deleteProfile);
+router.delete('/profile', authenticateJWT, deleteProfile);
 
 export default router;

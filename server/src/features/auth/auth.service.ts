@@ -12,7 +12,7 @@ if (!JWT_SECRET) {
 }
 
 function generateAccessToken(userId: number): string {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: JWT_EXPIRATION as SignOptions['expiresIn'] });
+  return jwt.sign({ userId, type:'access' }, JWT_SECRET, { expiresIn: JWT_EXPIRATION as SignOptions['expiresIn'] });
 }
 
 function generateRefreshToken(userId: number): string {
