@@ -374,7 +374,7 @@ describe('Auth endpoints', () => {
         .send({ deviceId: testDeviceId });
 
       const decoded = jwt.verify(loginResponse.body.accessToken, JWT_SECRET) as jwt.JwtPayload;
-      expect(decoded).not.toHaveProperty('type');
+      expect(decoded).toHaveProperty('type', 'access');
       expect(decoded).not.toHaveProperty('jti');
     });
 

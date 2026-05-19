@@ -1,17 +1,6 @@
-import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET!;
-
-if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET environment variable is not defined');
-}
-
-export interface AuthenticatedRequest extends Request {
-  user?: {
-    id: number;
-  };
-}
+import { Response, NextFunction } from 'express';
+import { verifyAccessToken, TokenError } from '../lib/jwt';
+import type { AuthenticatedRequest } from '../types/auth';
 
 export function authenticateJWT(
   req: AuthenticatedRequest,
@@ -19,19 +8,29 @@ export function authenticateJWT(
   next: NextFunction
 ): void {
   const authHeader = req.headers.authorization;
-  
+
   if (!authHeader?.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Unauthorized: missing or invalid token' });
     return;
   }
-  
+
   const token = authHeader.slice(7);
-  
+
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: number };
+    const decoded = verifyAccessToken(token);
     req.user = { id: decoded.userId };
     next();
-  } catch (error) {
-    res.status(401).json({ error: 'Unauthorized: invalid or expired token' });
+  } catch (err) {
+    if (err instanceof TokenError) {
+      if (err.code === 'TOKEN_EXPIRED') {
+      res.status(401).json({ error: 'Unauthorized: invalid or expired token' });
+        return;
+      }
+      if (err.code === 'INVALID_TYPE') {
+        res.status(401).json({ error: 'Unauthorized: invalid token type' });
+        return;
+      }
+    }
+    res.status(401).json({ error: 'Unauthorized: missing or invalid token' });
   }
 }

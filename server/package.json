@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "prisma:generate": "prisma generate",
-    "test": "jest --coverage",
+    "test": "jest --coverage --silent",
     "test:ci": "jest --coverage --ci"
   },
   "keywords": [],
