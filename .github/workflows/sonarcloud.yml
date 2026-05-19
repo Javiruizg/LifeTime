@@ -43,10 +43,17 @@ jobs:
         working-directory: app
         run: npm ci --legacy-peer-deps
 
+      - name: Push Prisma Schema to Test DB
+        working-directory: server
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/lifetime_test_db?schema=public
+        run: npx prisma db push
+
       - name: Run server tests with coverage
         working-directory: server
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/lifetime_test_db?schema=public
         run: npm run test:ci
 
       - name: Run app tests with coverage
