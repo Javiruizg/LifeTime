@@ -4,22 +4,24 @@ import { randomUUID } from 'crypto';
 import app from '../app';
 import { prisma } from '../shared/lib/prisma';
 import { authenticateJWT } from '../shared/middleware/jwtAuth';
+import { hashToken } from '../shared/lib/hash';
 
 describe('Auth endpoints', () => {
   const testDeviceId = 'test-device-123';
   const secondDeviceId = 'test-device-456';
   const uuidDeviceId = '550e8400-e29b-41d4-a716-446655440000';
   const JWT_SECRET = process.env.JWT_SECRET!;
+  const JWT_SECRET_REFRESH = process.env.JWT_SECRET_REFRESH!;
 
   beforeEach(async () => {
     await prisma.user.deleteMany({
-      where: { deviceId: { in: [testDeviceId, secondDeviceId, uuidDeviceId] } },
+      where: { deviceId: { in: [hashToken(testDeviceId), hashToken(secondDeviceId), hashToken(uuidDeviceId)] } },
     });
   });
 
   afterAll(async () => {
     await prisma.user.deleteMany({
-      where: { deviceId: { in: [testDeviceId, secondDeviceId, uuidDeviceId] } },
+      where: { deviceId: { in: [hashToken(testDeviceId), hashToken(secondDeviceId), hashToken(uuidDeviceId)] } },
     });
     await prisma.$disconnect();
   });
@@ -86,7 +88,7 @@ describe('Auth endpoints', () => {
           .post('/api/auth/device')
           .send({ deviceId: testDeviceId });
 
-        const decoded = jwt.verify(response.body.refreshToken, JWT_SECRET) as jwt.JwtPayload;
+        const decoded = jwt.verify(response.body.refreshToken, JWT_SECRET_REFRESH) as jwt.JwtPayload;
         expect(decoded).toHaveProperty('userId', response.body.userId);
         expect(decoded).toHaveProperty('type', 'refresh');
         expect(decoded).toHaveProperty('jti');
@@ -100,11 +102,11 @@ describe('Auth endpoints', () => {
           .send({ deviceId: testDeviceId });
 
         const user = await prisma.user.findUnique({
-          where: { deviceId: testDeviceId },
+          where: { deviceId: hashToken(testDeviceId) },
         });
 
         expect(user).not.toBeNull();
-        expect(user!.refreshToken).toBe(response.body.refreshToken);
+        expect(user!.refreshToken).toBe(hashToken(response.body.refreshToken));
       });
 
       it('should update the refresh token on subsequent logins', async () => {
@@ -119,9 +121,9 @@ describe('Auth endpoints', () => {
         expect(second.body.refreshToken).not.toBe(first.body.refreshToken);
 
         const user = await prisma.user.findUnique({
-          where: { deviceId: testDeviceId },
+          where: { deviceId: hashToken(testDeviceId) },
         });
-        expect(user!.refreshToken).toBe(second.body.refreshToken);
+        expect(user!.refreshToken).toBe(hashToken(second.body.refreshToken));
       });
     });
 
@@ -213,7 +215,7 @@ describe('Auth endpoints', () => {
           .post('/api/auth/refresh')
           .send({ refreshToken: validRefreshToken });
 
-        const decoded = jwt.verify(response.body.refreshToken, JWT_SECRET) as jwt.JwtPayload;
+        const decoded = jwt.verify(response.body.refreshToken, JWT_SECRET_REFRESH) as jwt.JwtPayload;
         expect(decoded).toHaveProperty('userId', testUserId);
         expect(decoded).toHaveProperty('type', 'refresh');
         expect(decoded).toHaveProperty('jti');
@@ -227,7 +229,7 @@ describe('Auth endpoints', () => {
         const user = await prisma.user.findUnique({
           where: { id: testUserId },
         });
-        expect(user!.refreshToken).toBe(response.body.refreshToken);
+        expect(user!.refreshToken).toBe(hashToken(response.body.refreshToken));
       });
 
       it('should allow multiple successive refresh operations', async () => {
@@ -299,7 +301,7 @@ describe('Auth endpoints', () => {
       });
 
       it('should reject a tampered JWT token', async () => {
-        const decoded = jwt.verify(validRefreshToken, JWT_SECRET) as jwt.JwtPayload;
+        const decoded = jwt.verify(validRefreshToken, JWT_SECRET_REFRESH) as jwt.JwtPayload;
         const tamperedPayload = { ...decoded, userId: 99999 };
         const tamperedToken = jwt.sign(tamperedPayload, 'wrong-secret');
 
@@ -336,7 +338,7 @@ describe('Auth endpoints', () => {
         const deletedUserRefreshToken = loginResponse.body.refreshToken;
 
         await prisma.user.deleteMany({
-          where: { deviceId: secondDeviceId },
+          where: { deviceId: hashToken(secondDeviceId) },
         });
 
         const response = await request(app)
@@ -399,12 +401,12 @@ describe('Auth endpoints', () => {
 
       await prisma.user.update({
         where: { id: userA.body.userId },
-        data: { refreshToken: 'something-else' },
+        data: { refreshToken: hashToken('something-else') },
       });
 
       await prisma.user.update({
         where: { id: userB.body.userId },
-        data: { refreshToken: userA.body.refreshToken },
+        data: { refreshToken: hashToken(userA.body.refreshToken) },
       });
 
       const response = await request(app)

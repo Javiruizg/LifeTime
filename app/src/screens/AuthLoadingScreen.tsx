@@ -21,7 +21,6 @@ export default function AuthLoadingScreen({ onAuthComplete, onError }: AuthLoadi
       setStatus('Getting device identifier...');
 
       let deviceId = await SecureStore.getItemAsync('user_device_id');
-      console.log('Device ID was already stored');
 
       if (!deviceId) {
         setStatus('Generating secure identifier...');
