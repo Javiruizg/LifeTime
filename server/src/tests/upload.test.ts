@@ -13,6 +13,7 @@ import { prisma } from '../shared/lib/prisma';
 import { UploadService, UploadError } from '../features/upload/upload.service';
 import { uploadProfile, deleteProfile } from '../features/upload/upload.controller';
 import type { AuthenticatedRequest } from '../shared/types/auth';
+import { hashToken } from '../shared/lib/hash';
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
@@ -145,15 +146,15 @@ describe('Upload', () => {
 
     beforeEach(async () => {
       await fs.rm(TEST_UPLOADS_DIR, { recursive: true, force: true });
-      await prisma.user.deleteMany({ where: { deviceId: testDeviceId } });
-      const user = await prisma.user.create({ data: { deviceId: testDeviceId } });
+      await prisma.user.deleteMany({ where: { deviceId: hashToken(testDeviceId) } });
+      const user = await prisma.user.create({ data: { deviceId: hashToken(testDeviceId) } });
       await prisma.profile.create({ data: { userId: user.id } });
       userId = user.id;
       service = new UploadService();
     });
 
     afterAll(async () => {
-      await prisma.user.deleteMany({ where: { deviceId: testDeviceId } });
+      await prisma.user.deleteMany({ where: { deviceId: hashToken(testDeviceId) } });
     });
 
     describe('uploadProfileImage', () => {
@@ -363,8 +364,8 @@ describe('Upload', () => {
 
     beforeEach(async () => {
       await fs.rm(TEST_UPLOADS_DIR, { recursive: true, force: true });
-      await prisma.user.deleteMany({ where: { deviceId: testDeviceId } });
-      const user = await prisma.user.create({ data: { deviceId: testDeviceId } });
+      await prisma.user.deleteMany({ where: { deviceId: hashToken(testDeviceId) } });
+      const user = await prisma.user.create({ data: { deviceId: hashToken(testDeviceId) } });
       await prisma.profile.create({ data: { userId: user.id } });
       userId = user.id;
       service = new UploadService();
@@ -378,7 +379,7 @@ describe('Upload', () => {
     });
 
     afterAll(async () => {
-      await prisma.user.deleteMany({ where: { deviceId: testDeviceId } });
+      await prisma.user.deleteMany({ where: { deviceId: hashToken(testDeviceId) } });
     });
 
     describe('uploadProfile', () => {
@@ -510,9 +511,9 @@ describe('Upload', () => {
 
     beforeEach(async () => {
       await fs.rm(TEST_UPLOADS_DIR, { recursive: true, force: true });
-      await prisma.user.deleteMany({ where: { deviceId: testDeviceId } });
+      await prisma.user.deleteMany({ where: { deviceId: hashToken(testDeviceId) } });
 
-      const user = await prisma.user.create({ data: { deviceId: testDeviceId } });
+      const user = await prisma.user.create({ data: { deviceId: hashToken(testDeviceId) } });
       await prisma.profile.create({ data: { userId: user.id } });
       userId = user.id;
 
@@ -520,7 +521,7 @@ describe('Upload', () => {
     });
 
     afterAll(async () => {
-      await prisma.user.deleteMany({ where: { deviceId: testDeviceId } });
+      await prisma.user.deleteMany({ where: { deviceId: hashToken(testDeviceId) } });
       await prisma.$disconnect();
     });
 

@@ -74,6 +74,7 @@ jobs:
         working-directory: server
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_SECRET_REFRESH: ${{ secrets.JWT_SECRET_REFRESH }}
           DATABASE_URL: postgresql://test_user:test_password@localhost:5433/lifetime_test_db?schema=public
         run: npm run test:ci
 
