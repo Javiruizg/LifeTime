@@ -14,6 +14,7 @@ import {
   Keyboard,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { api } from '../shared/lib/api';
 import { getMyProfile, updateProfile } from '../features/profile/profile.service';
@@ -139,25 +140,35 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
+      <LinearGradient
+        colors={[theme.colors.surface, theme.colors.background]}
+        style={styles.center}
+      >
         <ActivityIndicator size="large" color={theme.colors.primary} />
-      </View>
+      </LinearGradient>
     );
   }
 
   if (!profile) {
     return (
-      <View style={styles.center}>
+      <LinearGradient
+        colors={[theme.colors.surface, theme.colors.background]}
+        style={styles.center}
+      >
         <Text style={styles.errorText}>Profile not found</Text>
-      </View>
+      </LinearGradient>
     );
   }
  
   return (
-    <KeyboardAvoidingView
+    <LinearGradient
+      colors={[theme.colors.surface, theme.colors.background]}
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
@@ -246,13 +257,13 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
   },
   scrollContent: {
     flexGrow: 1,
@@ -262,7 +273,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.colors.background,
   },
   profileGroup: {
     flexDirection: 'row',
