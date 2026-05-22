@@ -3,7 +3,7 @@ export interface ProfileResponse {
   userId: number;
   name: string;
   message: string;
-  imageUrl: string | null;
+  imageUrl: string;
 }
 
 export interface UpdateProfileInput {

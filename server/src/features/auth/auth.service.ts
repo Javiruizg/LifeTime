@@ -62,6 +62,7 @@ export async function loginOrRegister(deviceId: string): Promise<AuthTokens & { 
         refreshToken: '',
         profile: {
           create: {
+            name: 'Unnamed',
             imageUrl: '/defaults/default-avatar.png',
           },
         },

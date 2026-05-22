@@ -16,7 +16,7 @@ export class ProfileService {
       userId: profile.userId,
       name: profile.name,
       message: profile.message,
-      imageUrl: profile.imageUrl,
+      imageUrl: profile.imageUrl ?? '/defaults/default-avatar.png',
     };
   }
 
@@ -34,7 +34,7 @@ export class ProfileService {
       userId: profile.userId,
       name: profile.name,
       message: profile.message,
-      imageUrl: profile.imageUrl,
+      imageUrl: profile.imageUrl ?? '/defaults/default-avatar.png',
     };
   }
 }

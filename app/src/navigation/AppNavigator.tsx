@@ -5,6 +5,7 @@ import AuthLoadingScreen from '../screens/AuthLoadingScreen';
 import HomeScreen from '../screens/HomeScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import { getAccessToken } from '../features/auth/auth.service';
+import { theme } from '../shared/lib/theme';
 
 export type RootStackParamList = {
   AuthLoading: undefined;
@@ -48,7 +49,18 @@ export default function AppNavigator() {
         {isAuthenticated ? (
           [
             <Stack.Screen key="Home" name="Home" component={HomeScreen} />,
-            <Stack.Screen key="Profile" name="Profile" component={ProfileScreen} />,
+            <Stack.Screen
+              key="Profile"
+              name="Profile"
+              component={ProfileScreen}
+              options={{
+                headerShown: true,
+                title: 'Profile',
+                headerStyle: { backgroundColor: theme.colors.primary },
+                headerTintColor: theme.colors.white,
+                headerTitleStyle: { fontWeight: '700' },
+              }}
+            />,
           ]
         ) : (
           <Stack.Screen name="AuthLoading">

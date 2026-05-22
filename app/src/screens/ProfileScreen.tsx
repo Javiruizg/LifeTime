@@ -11,13 +11,20 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Keyboard,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { Feather } from '@expo/vector-icons';
 import { api } from '../shared/lib/api';
 import { getMyProfile, updateProfile } from '../features/profile/profile.service';
 import type { Profile } from '../features/profile/profile.types';
+import { theme } from '../shared/lib/theme';
 
 const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL;
+const DEFAULT_AVATAR = '/defaults/default-avatar.png';
+
+const MAX_NAME_LENGTH = 20;
+const MAX_MESSAGE_LENGTH = 50;
 
 export default function ProfileScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -26,6 +33,7 @@ export default function ProfileScreen() {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState('');
   const [message, setMessage] = useState('');
+  const [bubbleText, setBubbleText] = useState('');
 
   useEffect(() => {
     loadProfile();
@@ -37,6 +45,7 @@ export default function ProfileScreen() {
       setProfile(data);
       setName(data.name);
       setMessage(data.message);
+      setBubbleText(data.message);
     } catch {
       Alert.alert('Error', 'Could not load profile');
     } finally {
@@ -45,16 +54,20 @@ export default function ProfileScreen() {
   };
 
   const getImageUrl = (imageUrl: string | null): string => {
-    if (!imageUrl) return '';
+    if (!imageUrl || imageUrl.trim() === '') {
+      return `${SERVER_URL}${DEFAULT_AVATAR}`;
+    }
     if (imageUrl.startsWith('http')) return imageUrl;
     return `${SERVER_URL}${imageUrl}`;
   };
 
   const handleSave = async () => {
+    Keyboard.dismiss();
     setSaving(true);
     try {
-      const updated = await updateProfile({ name, message });
+      const updated = await updateProfile({ name, message: bubbleText });
       setProfile(updated);
+      setMessage(bubbleText);
       setEditing(false);
     } catch {
       Alert.alert('Error', 'Could not save profile');
@@ -91,16 +104,36 @@ export default function ProfileScreen() {
       const response = await api.post<{ imageUrl: string }>('/upload/profile', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      setProfile((prev) => (prev ? { ...prev, imageUrl: response.data.imageUrl } : null));
+      setProfile((prev) => (prev ? { ...prev, imageUrl: response.data.imageUrl } : prev));
     } catch {
       Alert.alert('Error', 'Could not upload image');
     }
   };
 
+  const handleDeleteImage = async () => {
+    Alert.alert('Delete photo', 'Are you sure you want to remove your profile photo?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.delete('/upload/profile');
+            setProfile((prev) =>
+              prev ? { ...prev, imageUrl: DEFAULT_AVATAR } : prev
+            );
+          } catch {
+            Alert.alert('Error', 'Could not delete photo');
+          }
+        },
+      },
+    ]);
+  };
+
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
@@ -113,75 +146,108 @@ export default function ProfileScreen() {
     );
   }
 
+  const hasName = (profile.name || '').trim().length > 0;
+  const hasMessage = (profile.message || '').trim().length > 0;
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={handlePickImage} style={styles.avatarContainer}>
+        <View style={styles.profileGroup}>
+          <View style={styles.avatarWrapper}>
             <Image
               source={{ uri: getImageUrl(profile.imageUrl) }}
               style={styles.avatar}
             />
-            <View style={styles.avatarOverlay}>
-              <Text style={styles.avatarOverlayText}>Change</Text>
+            <View style={styles.avatarButtonsRow}>
+              <TouchableOpacity style={styles.avatarButtonDelete} onPress={handleDeleteImage}>
+                <Feather name="trash-2" size={18} color="white"/>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.avatarButtonEdit} onPress={handlePickImage}>
+                <Feather name="edit-2" size={18} color="white" />
+              </TouchableOpacity>
             </View>
-          </TouchableOpacity>
+          </View>
+
+          <View style={styles.speechBubbleContainer}>
+            <View style={styles.speechBubbleTail} />
+            <View style={styles.speechBubble}>
+              {editing ? (
+                <TextInput
+                  style={styles.speechBubbleInput}
+                  value={bubbleText}
+                  onChangeText={setBubbleText}
+                  placeholder="Write your message..."
+                  placeholderTextColor={theme.colors.textMuted}
+                  maxLength={MAX_MESSAGE_LENGTH}
+                  multiline
+                  textAlignVertical="top"
+                />
+              ) : (
+                <Text
+                  style={[
+                    styles.speechBubbleText,
+                    !hasMessage && styles.placeholderText,
+                  ]}
+                >
+                  {profile.message || 'No message set'}
+                </Text>
+              )}
+            </View>
+          </View>
         </View>
 
-        <View style={styles.form}>
-          <View style={styles.field}>
-            <Text style={styles.label}>Name</Text>
-            {editing ? (
-              <TextInput
-                style={styles.input}
-                value={name}
-                onChangeText={setName}
-                placeholder="Your name"
-                maxLength={100}
-              />
-            ) : (
-              <Text style={styles.value}>{profile.name || 'No name set'}</Text>
-            )}
+        <View style={styles.cardsContainer}>
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>NAME</Text>
+            <View style={styles.cardContent}>
+              <Text style={styles.userIcon}>👤</Text>
+              {editing ? (
+                <TextInput
+                  style={styles.cardInput}
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="Your name"
+                  placeholderTextColor={theme.colors.textMuted}
+                  maxLength={MAX_NAME_LENGTH}
+                />
+              ) : (
+                <Text
+                  style={[
+                    styles.cardValue,
+                    !hasName && styles.placeholderText,
+                  ]}
+                >
+                  {profile.name || 'No name set'}
+                </Text>
+              )}
+            </View>
           </View>
+        </View>
 
-          <View style={styles.field}>
-            <Text style={styles.label}>Status message</Text>
-            {editing ? (
-              <TextInput
-                style={[styles.input, styles.messageInput]}
-                value={message}
-                onChangeText={setMessage}
-                placeholder="What's on your mind?"
-                maxLength={255}
-                multiline
-              />
-            ) : (
-              <Text style={styles.value}>{profile.message || 'No message set'}</Text>
-            )}
-          </View>
-
+        <View style={styles.bottomSection}>
           {editing ? (
-            <View style={styles.actions}>
+            <View style={styles.editActions}>
               <TouchableOpacity
-                style={[styles.button, styles.cancelButton]}
+                style={[styles.editButton, styles.cancelButton]}
                 onPress={() => {
+                  Keyboard.dismiss();
                   setName(profile.name);
-                  setMessage(profile.message);
+                  setBubbleText(profile.message);
                   setEditing(false);
                 }}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.button, styles.saveButton]}
+                style={[styles.editButton, styles.saveButton]}
                 onPress={handleSave}
                 disabled={saving}
               >
                 {saving ? (
-                  <ActivityIndicator color="#fff" size="small" />
+                  <ActivityIndicator color={theme.colors.white} size="small" />
                 ) : (
                   <Text style={styles.saveButtonText}>Save</Text>
                 )}
@@ -189,10 +255,10 @@ export default function ProfileScreen() {
             </View>
           ) : (
             <TouchableOpacity
-              style={styles.editButton}
+              style={styles.editProfileButton}
               onPress={() => setEditing(true)}
             >
-              <Text style={styles.editButtonText}>Edit Profile</Text>
+              <Text style={styles.editProfileButtonText}>Edit Profile</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -204,114 +270,202 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.background,
   },
   scrollContent: {
     flexGrow: 1,
+    paddingBottom: 32,
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: theme.colors.background,
   },
-  header: {
+  profileGroup: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 32,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 32,
+    paddingBottom: 24,
+    gap: 16,
   },
-  avatarContainer: {
+  avatarWrapper: {
     position: 'relative',
+    flexShrink: 0,
   },
   avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#e0e0e0',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: theme.colors.border,
+    borderWidth: 4,
+    borderColor: theme.colors.white,
+    ...theme.shadows.lg,
   },
-  avatarOverlay: {
+  avatarButtonsRow: {
     position: 'absolute',
-    bottom: 0,
+    bottom: -4,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderBottomLeftRadius: 60,
-    borderBottomRightRadius: 60,
-    paddingVertical: 6,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  avatarButtonDelete: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: theme.colors.danger,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: theme.colors.white,
+    ...theme.shadows.sm,
   },
-  avatarOverlayText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
+  avatarButtonEdit: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: theme.colors.white,
+    ...theme.shadows.sm,
   },
-  form: {
-    paddingHorizontal: 24,
+  avatarIcon: {
+    fontSize: 16,
+    color: theme.colors.white,
   },
-  field: {
-    marginBottom: 24,
+  userIcon: {
+    fontSize: 20,
   },
-  label: {
+  speechBubbleContainer: {
+    flex: 1,
+    maxWidth: '55%',
+  },
+  speechBubbleTail: {
+    position: 'absolute',
+    left: -10,
+    top: 20,
+    width: 0,
+    height: 0,
+    borderTopWidth: 10,
+    borderBottomWidth: 10,
+    borderRightWidth: 12,
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
+    borderRightColor: theme.colors.white,
+    zIndex: 1,
+  },
+  speechBubble: {
+    backgroundColor: theme.colors.white,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    minHeight: 50,
+    ...theme.shadows.sm,
+  },
+  speechBubbleInput: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
+    color: theme.colors.text,
+    lineHeight: 20,
+    minHeight: 36,
+  },
+  speechBubbleText: {
+    fontSize: 14,
+    color: theme.colors.text,
+    lineHeight: 20,
+  },
+  placeholderText: {
+    color: theme.colors.textMuted,
+    fontStyle: 'italic',
+  },
+  cardsContainer: {
+    paddingHorizontal: 24,
+    gap: 16,
+  },
+  card: {
+    backgroundColor: theme.colors.white,
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    ...theme.shadows.sm,
+  },
+  cardLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: theme.colors.textSecondary,
+    letterSpacing: 0.8,
     marginBottom: 8,
   },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
+  cardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  messageInput: {
-    minHeight: 80,
-    textAlignVertical: 'top',
+  cardInput: {
+    flex: 1,
+    fontSize: 15,
+    color: theme.colors.text,
+    paddingVertical: 4,
   },
-  value: {
-    fontSize: 16,
-    color: '#333',
-    paddingVertical: 8,
+  cardValue: {
+    flex: 1,
+    fontSize: 15,
+    color: theme.colors.text,
   },
-  actions: {
+  bottomSection: {
+    paddingHorizontal: 24,
+    marginTop: 32,
+  },
+  editActions: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 8,
   },
-  button: {
+  editButton: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
   },
   cancelButton: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: theme.colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   cancelButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#666',
+    color: theme.colors.textSecondary,
   },
   saveButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: theme.colors.primary,
+    ...theme.shadows.md,
   },
   saveButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+    color: theme.colors.white,
   },
-  editButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 14,
-    borderRadius: 8,
+  editProfileButton: {
+    backgroundColor: theme.colors.primary,
+    paddingVertical: 16,
+    borderRadius: 12,
     alignItems: 'center',
-    marginTop: 8,
+    ...theme.shadows.md,
   },
-  editButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
+  editProfileButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: theme.colors.white,
   },
   errorText: {
     fontSize: 16,
-    color: '#666',
+    color: theme.colors.textSecondary,
   },
 });

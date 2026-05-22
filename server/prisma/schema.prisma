@@ -45,8 +45,8 @@ model User {
 model Profile {
   id        Int     @id @default(autoincrement())
   userId    Int     @unique @map("user_id")
-  name      String  @default("")
-  message   String  @default("")
+  name      String  @default("Unnamed") @db.VarChar(20)
+  message   String  @default("") @db.VarChar(50)
   imageUrl  String? @map("image_url")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
