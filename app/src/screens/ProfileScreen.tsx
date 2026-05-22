@@ -30,14 +30,19 @@ export default function ProfileScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [editing, setEditing] = useState(false);
+  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [name, setName] = useState('');
   const [message, setMessage] = useState('');
-  const [bubbleText, setBubbleText] = useState('');
 
   useEffect(() => {
     loadProfile();
   }, []);
+
+  useEffect(() => {
+    if (!notification) return;
+    const timer = setTimeout(() => setNotification(null), 2500);
+    return () => clearTimeout(timer);
+  }, [notification]);
 
   const loadProfile = async () => {
     try {
@@ -45,7 +50,6 @@ export default function ProfileScreen() {
       setProfile(data);
       setName(data.name);
       setMessage(data.message);
-      setBubbleText(data.message);
     } catch {
       Alert.alert('Error', 'Could not load profile');
     } finally {
@@ -63,12 +67,15 @@ export default function ProfileScreen() {
 
   const handleSave = async () => {
     Keyboard.dismiss();
+    if (!name.trim()) {
+      setNotification({ type: 'error', message: 'Name cannot be empty' });
+      return;
+    }
     setSaving(true);
     try {
-      const updated = await updateProfile({ name, message: bubbleText });
+      const updated = await updateProfile({ name, message });
       setProfile(updated);
-      setMessage(bubbleText);
-      setEditing(false);
+      setNotification({ type: 'success', message: 'Profile saved!' });
     } catch {
       Alert.alert('Error', 'Could not save profile');
     } finally {
@@ -145,16 +152,16 @@ export default function ProfileScreen() {
       </View>
     );
   }
-
-  const hasName = (profile.name || '').trim().length > 0;
-  const hasMessage = (profile.message || '').trim().length > 0;
-
+ 
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.profileGroup}>
           <View style={styles.avatarWrapper}>
             <Image
@@ -163,10 +170,10 @@ export default function ProfileScreen() {
             />
             <View style={styles.avatarButtonsRow}>
               <TouchableOpacity style={styles.avatarButtonDelete} onPress={handleDeleteImage}>
-                <Feather name="trash-2" size={18} color={theme.colors.background}/>
+                <Feather name="trash-2" size={18} color={theme.colors.surface}/>
               </TouchableOpacity>
               <TouchableOpacity style={styles.avatarButtonEdit} onPress={handlePickImage}>
-                <Feather name="edit-2" size={18} color={theme.colors.background} />
+                <Feather name="edit-2" size={18} color={theme.colors.surface} />
               </TouchableOpacity>
             </View>
           </View>
@@ -174,27 +181,16 @@ export default function ProfileScreen() {
           <View style={styles.speechBubbleContainer}>
             <View style={styles.speechBubbleTail} />
             <View style={styles.speechBubble}>
-              {editing ? (
-                <TextInput
-                  style={styles.speechBubbleInput}
-                  value={bubbleText}
-                  onChangeText={setBubbleText}
-                  placeholder="Write your message..."
-                  placeholderTextColor={theme.colors.textMuted}
-                  maxLength={MAX_MESSAGE_LENGTH}
-                  multiline
-                  textAlignVertical="top"
-                />
-              ) : (
-                <Text
-                  style={[
-                    styles.speechBubbleText,
-                    !hasMessage && styles.placeholderText,
-                  ]}
-                >
-                  {profile.message || 'No message set'}
-                </Text>
-              )}
+              <TextInput
+                style={styles.speechBubbleInput}
+                value={message}
+                onChangeText={setMessage}
+                placeholder="Write your message..."
+                placeholderTextColor={theme.colors.textMuted}
+                maxLength={MAX_MESSAGE_LENGTH}
+                multiline
+                textAlignVertical="top"
+              />
             </View>
           </View>
         </View>
@@ -204,65 +200,51 @@ export default function ProfileScreen() {
             <Text style={styles.cardLabel}>NAME</Text>
             <View style={styles.cardContent}>
               <Text style={styles.userIcon}>👤</Text>
-              {editing ? (
-                <TextInput
-                  style={styles.cardInput}
-                  value={name}
-                  onChangeText={setName}
-                  placeholder="Your name"
-                  placeholderTextColor={theme.colors.textMuted}
-                  maxLength={MAX_NAME_LENGTH}
-                />
-              ) : (
-                <Text
-                  style={[
-                    styles.cardValue,
-                    !hasName && styles.placeholderText,
-                  ]}
-                >
-                  {profile.name || 'No name set'}
-                </Text>
-              )}
+              <TextInput
+                style={styles.cardInput}
+                value={name}
+                onChangeText={(text) => {
+                  setName(text);
+                  setNotification(null);
+                }}
+                placeholder="Your name"
+                placeholderTextColor={theme.colors.textMuted}
+                maxLength={MAX_NAME_LENGTH}
+              />
             </View>
           </View>
         </View>
-
-        <View style={styles.bottomSection}>
-          {editing ? (
-            <View style={styles.editActions}>
-              <TouchableOpacity
-                style={[styles.editButton, styles.cancelButton]}
-                onPress={() => {
-                  Keyboard.dismiss();
-                  setName(profile.name);
-                  setBubbleText(profile.message);
-                  setEditing(false);
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.editButton, styles.saveButton]}
-                onPress={handleSave}
-                disabled={saving}
-              >
-                {saving ? (
-                  <ActivityIndicator color={theme.colors.background} size="small" />
-                ) : (
-                  <Text style={styles.saveButtonText}>Save</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={styles.editProfileButton}
-              onPress={() => setEditing(true)}
-            >
-              <Text style={styles.editProfileButtonText}>Edit Profile</Text>
-            </TouchableOpacity>
-          )}
-        </View>
       </ScrollView>
+
+      <View style={styles.bottomSection}>
+        {notification && (
+          <View style={notification.type === 'success' ? styles.successBanner : styles.errorBanner}>
+            <Feather
+              name={notification.type === 'success' ? 'check-circle' : 'alert-circle'}
+              size={18}
+              color={notification.type === 'success' ? theme.colors.success : theme.colors.danger}
+            />
+            <Text
+              style={
+                notification.type === 'success' ? styles.successBannerText : styles.errorBannerText
+              }
+            >
+              {notification.message}
+            </Text>
+          </View>
+        )}
+        <TouchableOpacity
+          style={styles.saveButton}
+          onPress={handleSave}
+          disabled={saving}
+        >
+          {saving ? (
+            <ActivityIndicator color={theme.colors.background} size="small" />
+          ) : (
+            <Text style={styles.saveButtonText}>Save</Text>
+          )}
+        </TouchableOpacity>
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -274,7 +256,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 48,
+    paddingBottom: theme.spacing.lg,
   },
   center: {
     flex: 1,
@@ -288,20 +270,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.xl,
-    paddingBottom: theme.spacing.lg,
-    gap: theme.spacing.md,
+    paddingBottom: theme.spacing['2xl'],
+    gap: theme.spacing.lg,
   },
   avatarWrapper: {
     position: 'relative',
     flexShrink: 0,
   },
   avatar: {
-    width: 140,
-    height: 140,
+    width: 150,
+    height: 150,
     borderRadius: theme.radius.round,
     backgroundColor: theme.colors.surfaceAlt,
     borderWidth: 4,
-    borderColor: theme.colors.background,
+    borderColor: theme.colors.surface,
     ...theme.shadows.md,
   },
   avatarButtonsRow: {
@@ -321,7 +303,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: theme.colors.background,
+    borderColor: theme.colors.surface,
     ...theme.shadows.sm,
   },
   avatarButtonEdit: {
@@ -332,12 +314,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: theme.colors.background,
+    borderColor: theme.colors.surface,
     ...theme.shadows.sm,
-  },
-  avatarIcon: {
-    fontSize: theme.typography.fontSize.base,
-    color: theme.colors.background,
   },
   userIcon: {
     fontSize: theme.typography.fontSize.xl,
@@ -375,23 +353,15 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     minHeight: 36,
   },
-  speechBubbleText: {
-    fontSize: theme.typography.fontSize.sm,
-    color: theme.colors.text,
-    lineHeight: 22,
-  },
-  placeholderText: {
-    color: theme.colors.textMuted,
-    fontStyle: 'italic',
-  },
   cardsContainer: {
     paddingHorizontal: theme.spacing.lg,
-    gap: theme.spacing.md,
+    marginTop: theme.spacing.xl,
+    gap: theme.spacing.lg,
   },
   card: {
     backgroundColor: theme.colors.surface,
     borderRadius: theme.radius.lg,
-    padding: theme.spacing.md,
+    padding: theme.spacing.lg,
     borderWidth: 1,
     borderColor: theme.colors.border,
     ...theme.shadows.sm,
@@ -401,7 +371,7 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.fontWeight.bold,
     color: theme.colors.primary,
     letterSpacing: 1,
-    marginBottom: 8,
+    marginBottom: 12,
   },
   cardContent: {
     flexDirection: 'row',
@@ -414,53 +384,48 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     paddingVertical: 4,
   },
-  cardValue: {
-    flex: 1,
-    fontSize: theme.typography.fontSize.base,
-    color: theme.colors.text,
-  },
   bottomSection: {
-    paddingHorizontal: theme.spacing.lg,
-    marginTop: theme.spacing.xl,
+    paddingHorizontal: theme.spacing['2xl'],
+    paddingBottom: theme.spacing['2xl'],
+    gap: theme.spacing.sm,
   },
-  editActions: {
+  successBanner: {
     flexDirection: 'row',
-    gap: 12,
-  },
-  editButton: {
-    flex: 1,
-    paddingVertical: 16,
-    borderRadius: theme.radius.xl,
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(52, 211, 153, 0.17)',
+    borderRadius: theme.radius.md,
   },
-  cancelButton: {
-    backgroundColor: theme.colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: theme.colors.borderLight,
+  successBannerText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+    color: theme.colors.success,
   },
-  cancelButtonText: {
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.semibold,
-    color: theme.colors.textSecondary,
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(235, 58, 58, 0.17)',
+    borderRadius: theme.radius.md,
+  },
+  errorBannerText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+    color: theme.colors.danger,
   },
   saveButton: {
     backgroundColor: theme.colors.primary,
+    paddingVertical: 16,
+    borderRadius: theme.radius.xl,
+    alignItems: 'center',
     ...theme.shadows.neon,
   },
   saveButtonText: {
     fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold,
-    color: theme.colors.background,
-  },
-  editProfileButton: {
-    backgroundColor: theme.colors.primary,
-    paddingVertical: 16,
-    borderRadius: theme.radius.round,
-    alignItems: 'center',
-    ...theme.shadows.neon,
-  },
-  editProfileButtonText: {
-    fontSize: theme.typography.fontSize.lg,
     fontWeight: theme.typography.fontWeight.bold,
     color: theme.colors.background,
   },
