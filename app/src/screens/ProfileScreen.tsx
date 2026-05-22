@@ -163,10 +163,10 @@ export default function ProfileScreen() {
             />
             <View style={styles.avatarButtonsRow}>
               <TouchableOpacity style={styles.avatarButtonDelete} onPress={handleDeleteImage}>
-                <Feather name="trash-2" size={18} color="white"/>
+                <Feather name="trash-2" size={18} color={theme.colors.background}/>
               </TouchableOpacity>
               <TouchableOpacity style={styles.avatarButtonEdit} onPress={handlePickImage}>
-                <Feather name="edit-2" size={18} color="white" />
+                <Feather name="edit-2" size={18} color={theme.colors.background} />
               </TouchableOpacity>
             </View>
           </View>
@@ -247,7 +247,7 @@ export default function ProfileScreen() {
                 disabled={saving}
               >
                 {saving ? (
-                  <ActivityIndicator color={theme.colors.white} size="small" />
+                  <ActivityIndicator color={theme.colors.background} size="small" />
                 ) : (
                   <Text style={styles.saveButtonText}>Save</Text>
                 )}
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 32,
+    paddingBottom: 48,
   },
   center: {
     flex: 1,
@@ -286,10 +286,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 32,
-    paddingBottom: 24,
-    gap: 16,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.xl,
+    paddingBottom: theme.spacing.lg,
+    gap: theme.spacing.md,
   },
   avatarWrapper: {
     position: 'relative',
@@ -298,11 +298,11 @@ const styles = StyleSheet.create({
   avatar: {
     width: 140,
     height: 140,
-    borderRadius: 70,
-    backgroundColor: theme.colors.border,
+    borderRadius: theme.radius.round,
+    backgroundColor: theme.colors.surfaceAlt,
     borderWidth: 4,
-    borderColor: theme.colors.white,
-    ...theme.shadows.lg,
+    borderColor: theme.colors.background,
+    ...theme.shadows.md,
   },
   avatarButtonsRow: {
     position: 'absolute',
@@ -316,31 +316,31 @@ const styles = StyleSheet.create({
   avatarButtonDelete: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: theme.radius.round,
     backgroundColor: theme.colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: theme.colors.white,
+    borderColor: theme.colors.background,
     ...theme.shadows.sm,
   },
   avatarButtonEdit: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: theme.radius.round,
     backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: theme.colors.white,
+    borderColor: theme.colors.background,
     ...theme.shadows.sm,
   },
   avatarIcon: {
-    fontSize: 16,
-    color: theme.colors.white,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.background,
   },
   userIcon: {
-    fontSize: 20,
+    fontSize: theme.typography.fontSize.xl,
   },
   speechBubbleContainer: {
     flex: 1,
@@ -357,50 +357,50 @@ const styles = StyleSheet.create({
     borderRightWidth: 12,
     borderTopColor: 'transparent',
     borderBottomColor: 'transparent',
-    borderRightColor: theme.colors.white,
+    borderRightColor: theme.colors.surface,
     zIndex: 1,
   },
   speechBubble: {
-    backgroundColor: theme.colors.white,
-    borderRadius: 16,
-    padding: 14,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    padding: 16,
     borderWidth: 1,
     borderColor: theme.colors.border,
     minHeight: 50,
     ...theme.shadows.sm,
   },
   speechBubbleInput: {
-    fontSize: 14,
+    fontSize: theme.typography.fontSize.sm,
     color: theme.colors.text,
-    lineHeight: 20,
+    lineHeight: 22,
     minHeight: 36,
   },
   speechBubbleText: {
-    fontSize: 14,
+    fontSize: theme.typography.fontSize.sm,
     color: theme.colors.text,
-    lineHeight: 20,
+    lineHeight: 22,
   },
   placeholderText: {
     color: theme.colors.textMuted,
     fontStyle: 'italic',
   },
   cardsContainer: {
-    paddingHorizontal: 24,
-    gap: 16,
+    paddingHorizontal: theme.spacing.lg,
+    gap: theme.spacing.md,
   },
   card: {
-    backgroundColor: theme.colors.white,
-    borderRadius: 14,
-    padding: 16,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.md,
     borderWidth: 1,
     borderColor: theme.colors.border,
     ...theme.shadows.sm,
   },
   cardLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: theme.colors.textSecondary,
-    letterSpacing: 0.8,
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.bold,
+    color: theme.colors.primary,
+    letterSpacing: 1,
     marginBottom: 8,
   },
   cardContent: {
@@ -410,18 +410,18 @@ const styles = StyleSheet.create({
   },
   cardInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: theme.typography.fontSize.base,
     color: theme.colors.text,
     paddingVertical: 4,
   },
   cardValue: {
     flex: 1,
-    fontSize: 15,
+    fontSize: theme.typography.fontSize.base,
     color: theme.colors.text,
   },
   bottomSection: {
-    paddingHorizontal: 24,
-    marginTop: 32,
+    paddingHorizontal: theme.spacing.lg,
+    marginTop: theme.spacing.xl,
   },
   editActions: {
     flexDirection: 'row',
@@ -429,43 +429,43 @@ const styles = StyleSheet.create({
   },
   editButton: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: 16,
+    borderRadius: theme.radius.xl,
     alignItems: 'center',
   },
   cancelButton: {
     backgroundColor: theme.colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: theme.colors.borderLight,
   },
   cancelButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.semibold,
     color: theme.colors.textSecondary,
   },
   saveButton: {
     backgroundColor: theme.colors.primary,
-    ...theme.shadows.md,
+    ...theme.shadows.neon,
   },
   saveButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: theme.colors.white,
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.bold,
+    color: theme.colors.background,
   },
   editProfileButton: {
     backgroundColor: theme.colors.primary,
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: theme.radius.round,
     alignItems: 'center',
-    ...theme.shadows.md,
+    ...theme.shadows.neon,
   },
   editProfileButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: theme.colors.white,
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.bold,
+    color: theme.colors.background,
   },
   errorText: {
-    fontSize: 16,
+    fontSize: theme.typography.fontSize.base,
     color: theme.colors.textSecondary,
   },
 });

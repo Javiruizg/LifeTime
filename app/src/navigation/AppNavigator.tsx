@@ -56,9 +56,14 @@ export default function AppNavigator() {
               options={{
                 headerShown: true,
                 title: 'Profile',
-                headerStyle: { backgroundColor: theme.colors.primary },
-                headerTintColor: theme.colors.white,
-                headerTitleStyle: { fontWeight: '700' },
+                headerStyle: { backgroundColor: theme.colors.surface },
+                headerTintColor: theme.colors.primary,
+                headerTitleStyle: {
+                  fontWeight: theme.typography.fontWeight.bold,
+                  fontSize: theme.typography.fontSize.lg,
+                  color: theme.colors.text,
+                },
+                headerShadowVisible: false,
               }}
             />,
           ]
