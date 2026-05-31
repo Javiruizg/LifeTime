@@ -60,6 +60,12 @@ export async function loginOrRegister(deviceId: string): Promise<AuthTokens & { 
       data: {
         deviceId: hashedDeviceId,
         refreshToken: '',
+        profile: {
+          create: {
+            name: 'Unnamed',
+            imageUrl: '/defaults/default-avatar.png',
+          },
+        },
       },
     });
     console.log(`User created with ID: ${user.id}`);

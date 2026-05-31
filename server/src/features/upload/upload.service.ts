@@ -98,11 +98,12 @@ export class UploadService {
 
     if (profile?.imageUrl) {
       await this.storage.delete(profile.imageUrl);
-      await prisma.profile.update({
-        where: { userId },
-        data: { imageUrl: null },
-      });
     }
+
+    await prisma.profile.update({
+      where: { userId },
+      data: { imageUrl: '/defaults/default-avatar.png' },
+    });
   }
 }
 

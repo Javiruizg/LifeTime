@@ -306,7 +306,7 @@ describe('Upload', () => {
     });
 
     describe('deleteProfileImage', () => {
-      it('should delete the image file and set imageUrl to null', async () => {
+      it('should delete the image file and revert to default avatar', async () => {
         const buffer = await createTestImageBuffer(200, 200);
         const url = await service.uploadProfileImage(userId, buffer, 'image/jpeg');
 
@@ -321,17 +321,17 @@ describe('Upload', () => {
           where: { userId },
           select: { imageUrl: true },
         });
-        expect(profile?.imageUrl).toBeNull();
+        expect(profile?.imageUrl).toBe('/defaults/default-avatar.png');
       });
 
-      it('should do nothing if the user has no profile image', async () => {
+      it('should not throw if the user has no custom profile image and revert to default', async () => {
         await expect(service.deleteProfileImage(userId)).resolves.toBeUndefined();
 
         const profile = await prisma.profile.findUnique({
           where: { userId },
           select: { imageUrl: true },
         });
-        expect(profile?.imageUrl).toBeNull();
+        expect(profile?.imageUrl).toBe('/defaults/default-avatar.png');
       });
 
       it('should not throw if the file is already missing from disk', async () => {
@@ -347,7 +347,7 @@ describe('Upload', () => {
           where: { userId },
           select: { imageUrl: true },
         });
-        expect(profile?.imageUrl).toBeNull();
+        expect(profile?.imageUrl).toBe('/defaults/default-avatar.png');
       });
     });
   });
@@ -475,7 +475,7 @@ describe('Upload', () => {
         expect(mockSend).toHaveBeenCalled();
       });
 
-      it('should delete the image file and clear imageUrl in DB', async () => {
+      it('should delete the image file and revert to default avatar in DB', async () => {
         const fileBuffer = await createTestImageBuffer(200, 200);
         (mockReq as any).file = { buffer: fileBuffer, mimetype: 'image/jpeg' };
         await uploadProfile(mockReq as AuthenticatedRequest, mockRes as Response);
@@ -499,7 +499,7 @@ describe('Upload', () => {
           where: { userId },
           select: { imageUrl: true },
         });
-        expect(profileAfter?.imageUrl).toBeNull();
+        expect(profileAfter?.imageUrl).toBe('/defaults/default-avatar.png');
       });
     });
   });
@@ -720,7 +720,7 @@ describe('Upload', () => {
             where: { userId },
             select: { imageUrl: true },
           });
-          expect(profile?.imageUrl).toBeNull();
+          expect(profile?.imageUrl).toBe('/defaults/default-avatar.png');
         });
 
         it('should return 204 even if user has no profile image', async () => {

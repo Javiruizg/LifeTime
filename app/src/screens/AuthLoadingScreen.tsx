@@ -3,6 +3,7 @@ import { StyleSheet, Text, View, ActivityIndicator } from 'react-native';
 import { loginOrRegister } from '../features/auth/auth.service';
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
+import { theme } from '../shared/lib/theme';
 
 interface AuthLoadingScreenProps {
   onAuthComplete: () => void;
@@ -49,7 +50,7 @@ export default function AuthLoadingScreen({ onAuthComplete, onError }: AuthLoadi
   return (
     <View style={styles.container}>
       <Text style={styles.title}>LifeTime</Text>
-      <ActivityIndicator size="large" color="#007AFF" />
+      <ActivityIndicator size="large" color={theme.colors.primary} />
       <Text style={styles.status}>{status}</Text>
     </View>
   );
@@ -58,19 +59,21 @@ export default function AuthLoadingScreen({ onAuthComplete, onError }: AuthLoadi
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.background,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
   },
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
+    fontSize: theme.typography.fontSize['4xl'],
+    fontWeight: theme.typography.fontWeight.bold,
+    color: theme.colors.primary,
     marginBottom: 32,
+    letterSpacing: 2,
   },
   status: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textMuted,
     marginTop: 24,
     textAlign: 'center',
   },
