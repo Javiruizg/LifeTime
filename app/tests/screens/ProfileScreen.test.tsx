@@ -35,10 +35,6 @@ jest.mock('@expo/vector-icons', () => ({
   Feather: 'Feather',
 }));
 
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
 function findSaveButton(root: any): any {
   const texts = root.findAllByType('Text');
   for (const t of texts) {
@@ -53,24 +49,16 @@ function findSaveButton(root: any): any {
   return null;
 }
 
-async function renderProfile(): Promise<any> {
-  const ProfileScreen = require('../../src/screens/ProfileScreen').default;
-  let c: any;
-  await act(async () => {
-    c = renderer.create(<ProfileScreen />);
-    await sleep(50);
-  });
-  return c;
-}
-
 describe('ProfileScreen', () => {
   let getMyProfile: jest.Mock;
   let updateProfile: jest.Mock;
   let api: any;
   let ImagePicker: any;
+  let mountedRenderers: any[] = [];
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mountedRenderers = [];
 
     getMyProfile = require('../../src/features/profile/profile.service').getMyProfile;
     updateProfile = require('../../src/features/profile/profile.service').updateProfile;
@@ -88,28 +76,45 @@ describe('ProfileScreen', () => {
     });
   });
 
+  afterEach(() => {
+    for (const r of mountedRenderers) {
+      r.unmount();
+    }
+  });
+
+  async function renderAndTrack(): Promise<any> {
+    const ProfileScreen = require('../../src/screens/ProfileScreen').default;
+    let r: any;
+    await act(async () => {
+      r = renderer.create(<ProfileScreen />);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    mountedRenderers.push(r);
+    return r;
+  }
+
   it('renders loading state', () => {
     getMyProfile.mockImplementation(() => new Promise(() => {}));
     const ProfileScreen = require('../../src/screens/ProfileScreen').default;
-    let c: any;
-    act(() => { c = renderer.create(<ProfileScreen />); });
-    expect(c.root.findAllByType('LinearGradient').length).toBeGreaterThan(0);
-    expect(c.root.findAllByType('ActivityIndicator').length).toBe(1);
+    let r: any;
+    act(() => { r = renderer.create(<ProfileScreen />); });
+    mountedRenderers.push(r);
+    expect(r.root.findAllByType('LinearGradient').length).toBeGreaterThan(0);
+    expect(r.root.findAllByType('ActivityIndicator').length).toBe(1);
   });
 
   it('renders profile not found on null or error', async () => {
     getMyProfile.mockResolvedValue(null);
-    let c = await renderProfile();
+    let c = await renderAndTrack();
     expect(c.root.findAllByType('Text').map((t: any) => t.props.children)).toContain('Profile not found');
 
-    jest.clearAllMocks();
     getMyProfile.mockRejectedValue(new Error('x'));
-    c = await renderProfile();
+    c = await renderAndTrack();
     expect(c.root.findAllByType('Text').map((t: any) => t.props.children)).toContain('Profile not found');
   });
 
   it('renders profile with all structural elements and icons', async () => {
-    const c = await renderProfile();
+    const c = await renderAndTrack();
     const contents = c.root.findAllByType('Text').map((t: any) => t.props.children);
     expect(contents).toContain('NAME');
     expect(contents).toContain('Save');
@@ -123,12 +128,19 @@ describe('ProfileScreen', () => {
   });
 
   it('saves profile successfully and shows notification', async () => {
-    const c = await renderProfile();
+    const c = await renderAndTrack();
     const inputs = c.root.findAllByType('TextInput');
-    await act(async () => { inputs[1].props.onChangeText('New Name'); await sleep(50); });
+
+    await act(async () => {
+      inputs[1].props.onChangeText('New Name');
+      await new Promise((r) => setTimeout(r, 0));
+    });
 
     const saveBtn = findSaveButton(c.root);
-    await act(async () => { saveBtn.props.onPress(); await sleep(50); });
+    await act(async () => {
+      saveBtn.props.onPress();
+      await new Promise((r) => setTimeout(r, 0));
+    });
 
     expect(updateProfile).toHaveBeenCalledWith({ name: 'New Name', message: 'Hello world' });
     expect(c.root.findAllByType('Text').map((t: any) => t.props.children)).toContain('Profile saved!');
@@ -136,63 +148,87 @@ describe('ProfileScreen', () => {
   });
 
   it('shows error notification with alert-circle when name is empty', async () => {
-    const c = await renderProfile();
+    const c = await renderAndTrack();
     const inputs = c.root.findAllByType('TextInput');
-    await act(async () => { inputs[1].props.onChangeText(''); await sleep(50); });
+
+    await act(async () => {
+      inputs[1].props.onChangeText('');
+      await new Promise((r) => setTimeout(r, 0));
+    });
 
     const saveBtn = findSaveButton(c.root);
-    await act(async () => { saveBtn.props.onPress(); await sleep(50); });
+    await act(async () => {
+      saveBtn.props.onPress();
+      await new Promise((r) => setTimeout(r, 0));
+    });
 
     expect(c.root.findAllByType('Text').map((t: any) => t.props.children)).toContain('Name cannot be empty');
     expect(c.root.findAllByType('Feather').find((f: any) => f.props.name === 'alert-circle')).toBeDefined();
   });
 
   it('shows ActivityIndicator on save button while saving', async () => {
-    const c = await renderProfile();
+    const c = await renderAndTrack();
     const inputs = c.root.findAllByType('TextInput');
-    await act(async () => { inputs[1].props.onChangeText('Valid'); await sleep(50); });
+
+    await act(async () => {
+      inputs[1].props.onChangeText('Valid');
+      await new Promise((r) => setTimeout(r, 0));
+    });
 
     updateProfile.mockImplementation(() => new Promise(() => {}));
     const saveBtn = findSaveButton(c.root);
-    await act(async () => { saveBtn.props.onPress(); await sleep(50); });
+    await act(async () => {
+      saveBtn.props.onPress();
+      await new Promise((r) => setTimeout(r, 0));
+    });
 
     expect(c.root.findAllByType('Text').map((t: any) => t.props.children)).not.toContain('Save');
   });
 
   it('speech bubble TextInput updates value on changeText', async () => {
-    const c = await renderProfile();
+    const c = await renderAndTrack();
     await act(async () => {
       c.root.findAllByType('TextInput')[0].props.onChangeText('New message');
-      await sleep(50);
+      await new Promise((r) => setTimeout(r, 0));
     });
     expect(c.root.findAllByType('TextInput')[0].props.value).toBe('New message');
   });
 
   it('clears error notification when typing in name field', async () => {
-    const c = await renderProfile();
+    const c = await renderAndTrack();
     const inputs = c.root.findAllByType('TextInput');
     const saveBtn = findSaveButton(c.root);
 
-    await act(async () => { inputs[1].props.onChangeText(''); await sleep(50); });
-    await act(async () => { saveBtn.props.onPress(); await sleep(50); });
+    await act(async () => {
+      inputs[1].props.onChangeText('');
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    await act(async () => {
+      saveBtn.props.onPress();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
     expect(c.root.findAllByType('Text').map((t: any) => t.props.children)).toContain('Name cannot be empty');
 
     await act(async () => {
       c.root.findAllByType('TextInput')[1].props.onChangeText('A');
-      await sleep(50);
+      await new Promise((r) => setTimeout(r, 0));
     });
     expect(c.root.findAllByType('Text').map((t: any) => t.props.children)).not.toContain('Name cannot be empty');
   });
 
   it('uploads image when edit avatar is pressed', async () => {
-    const c = await renderProfile();
+    const c = await renderAndTrack();
     api.post.mockClear();
 
     const editIcon = c.root.findAllByType('Feather').find((f: any) => f.props.name === 'edit-2');
     let editNode = editIcon.parent;
     while (editNode && !editNode.props?.onPress) editNode = editNode.parent;
 
-    await act(async () => { editNode.props.onPress(); await sleep(50); });
+    await act(async () => {
+      editNode.props.onPress();
+      await new Promise((r) => setTimeout(r, 0));
+    });
 
     expect(api.post).toHaveBeenCalledWith(
       '/upload/profile',
@@ -203,30 +239,31 @@ describe('ProfileScreen', () => {
 
   it('does not upload when picker is canceled', async () => {
     ImagePicker.launchImageLibraryAsync.mockResolvedValue({ canceled: true, assets: [] });
-    const c = await renderProfile();
+    const c = await renderAndTrack();
     api.post.mockClear();
 
     const editIcon = c.root.findAllByType('Feather').find((f: any) => f.props.name === 'edit-2');
     let editNode = editIcon.parent;
     while (editNode && !editNode.props?.onPress) editNode = editNode.parent;
 
-    await act(async () => { editNode.props.onPress(); await sleep(50); });
+    await act(async () => {
+      editNode.props.onPress();
+      await new Promise((r) => setTimeout(r, 0));
+    });
     expect(api.post).not.toHaveBeenCalled();
   });
 
   it('handles imageUrl correctly for null, absolute, and relative paths', async () => {
     getMyProfile.mockResolvedValue({ ...mockProfile, imageUrl: null });
-    let c = await renderProfile();
+    let c = await renderAndTrack();
     expect(c.root.findAllByType('Image')[0].props.source.uri).toContain('default-avatar');
 
-    jest.clearAllMocks();
     getMyProfile.mockResolvedValue({ ...mockProfile, imageUrl: 'https://cdn.example.com/avatar.png' });
-    c = await renderProfile();
+    c = await renderAndTrack();
     expect(c.root.findAllByType('Image')[0].props.source.uri).toBe('https://cdn.example.com/avatar.png');
 
-    jest.clearAllMocks();
     getMyProfile.mockResolvedValue({ ...mockProfile, imageUrl: '/uploads/test.png' });
-    c = await renderProfile();
+    c = await renderAndTrack();
     expect(c.root.findAllByType('Image')[0].props.source.uri).toContain('/uploads/test.png');
   });
 });
