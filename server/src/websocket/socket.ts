@@ -6,12 +6,7 @@ import type { SocketData } from '../shared/types/auth';
 const SOCKET_AUTH_ERROR = 'Unauthorized: missing token';
 
 export function setupSocket(httpServer: HttpServer): SocketIOServer {
-  const io = new SocketIOServer<SocketData>(httpServer, {
-    cors: {
-      origin: '*',
-      methods: ['GET', 'POST'],
-    },
-  });
+  const io = new SocketIOServer<SocketData>(httpServer);
 
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token as string | undefined;

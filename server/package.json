@@ -4,8 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "prisma:generate": "prisma generate",
+    "build": "tsc",
+    "postinstall": "prisma generate",
+    "start": "node dist/index.js",
     "test": "jest --coverage --silent",
     "test:ci": "jest --coverage --ci"
   },
@@ -15,6 +16,7 @@
   "type": "commonjs",
   "dependencies": {
     "@prisma/client": "^4.15.0",
+    "@supabase/supabase-js": "^2.106.2",
     "cors": "^2.8.6",
     "crypto-js": "^4.2.0",
     "dotenv": "^17.4.2",
