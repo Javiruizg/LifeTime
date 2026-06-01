@@ -1,5 +1,4 @@
 import express, { type Request, type Response, type NextFunction } from 'express';
-import cors from 'cors';
 import helmet from 'helmet';
 import path from 'path';
 import authRouter from './features/auth/auth.routes';
@@ -10,7 +9,6 @@ const app = express();
 
 // Global middlewares
 app.use(helmet());
-app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
