@@ -63,3 +63,6 @@ yarn-error.*
 .cache/
 
 opencode.json
+
+app/android/
+app/ios/
