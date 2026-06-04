@@ -8,6 +8,7 @@ import {
   Platform,
   StatusBar,
   Text,
+  Linking,
 } from 'react-native';
 import MapView, { Marker, type Region, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -110,6 +111,48 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
 
+  const handleRequestLocation = useCallback(async () => {
+    try {
+      const existing = await Location.getForegroundPermissionsAsync();
+      if (existing.granted) {
+        const pos = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+        setLocation(coords);
+        setLocationError(null);
+        mapRef.current?.animateToRegion(
+          { ...coords, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
+          800,
+        );
+        return;
+      }
+
+      if (existing.canAskAgain) {
+        const request = await Location.requestForegroundPermissionsAsync();
+        if (request.granted) {
+          const pos = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+          setLocation(coords);
+          setLocationError(null);
+          mapRef.current?.animateToRegion(
+            { ...coords, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
+            800,
+          );
+        } else {
+          setLocationError('Ubication is required to use the app');
+        }
+        return;
+      }
+
+      await Linking.openSettings();
+    } catch {
+      setLocationError('Ubication is required to use the app');
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
@@ -139,7 +182,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             );
           } else {
             setLocation(null);
-            setLocationError('Permiso de ubicación denegado');
+            setLocationError('Ubication is required to use the app');
             mapRef.current?.animateToRegion(DEFAULT_REGION, 800);
           }
         } catch {
@@ -246,8 +289,18 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       </MapView>
 
       {locationError && (
-        <View style={styles.errorBadge}>
-          <Feather name="alert-circle" size={14} color={theme.colors.text} />
+        <View style={styles.errorRow}>
+          <View style={styles.errorBox}>
+            <Feather name="alert-circle" size={16} color={theme.colors.text} />
+            <Text style={styles.errorBoxText}>{locationError}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.enableBox}
+            onPress={handleRequestLocation}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.enableBoxText}>Enable location</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -407,13 +460,39 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(255, 255, 255, 1)',
   },
 
-  errorBadge: {
+  errorRow: {
     position: 'absolute',
     bottom: 40,
     alignSelf: 'center',
-    backgroundColor: 'rgba(220, 50, 50, 0.85)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 8,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(220, 50, 50, 0.92)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 8,
+  },
+  errorBoxText: {
+    color: theme.colors.text,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  enableBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.success,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  enableBoxText: {
+    color: '#000000ff',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
