@@ -10,7 +10,7 @@ import {
   Text,
   Linking,
 } from 'react-native';
-import MapView, { Marker, type Region, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { type Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useFocusEffect } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
@@ -19,6 +19,7 @@ import type { RootStackParamList } from '../navigation/AppNavigator';
 import { getMyProfile } from '../features/profile/profile.service';
 import type { Profile } from '../features/profile/profile.types';
 import { theme } from '../shared/lib/theme';
+import LiveMap from '../components/LiveMap';
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 
@@ -36,46 +37,9 @@ const DEFAULT_REGION: Region = {
   longitudeDelta: 0.05,
 };
 
-const ANTARCTICA_REGION: Region = {
-  latitude: -75.0,
-  longitude: 0.0,
-  latitudeDelta: 30,
-  longitudeDelta: 60,
-};
-
 const DEFAULT_DELTA = 0.01;
 
-const DARK_MAP_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: '#1E293B' }] },
-  { elementType: 'geometry.stroke', stylers: [{ color: '#334155' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#CBD5E1' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#1E293B' }] },
-  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#334155' }] },
-  { featureType: 'administrative.country', elementType: 'labels.text.fill', stylers: [{ color: '#94A3B8' }] },
-  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#94A3B8' }] },
-  { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#0F172A' }] },
-  { featureType: 'landscape.man_made', elementType: 'geometry', stylers: [{ color: '#1E293B' }] },
-  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#1E293B' }] },
-  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#94A3B8' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#162218' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#334155' }] },
-  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#94A3B8' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#475569' }] },
-  { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#CBD5E1' }] },
-  { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#334155' }] },
-  { featureType: 'transit.line', elementType: 'geometry', stylers: [{ color: '#475569' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0c2d48' }] },
-  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#94A3B8' }] },
-];
-
-const AVATAR_SIZE = 44;
-const BORDER_WIDTH = 3;
 const FLOAT_BUTTON_SIZE = 56;
-
-const AVATAR_OUTER = AVATAR_SIZE + BORDER_WIDTH * 2;
-const BUBBLE_MAX_W = 220;
-const BUBBLE_SHIFT = 20;
-const MARKER_W = BUBBLE_MAX_W + BUBBLE_SHIFT + AVATAR_OUTER;
 
 const getImageUrl = (imageUrl: string | null): string => {
   if (!imageUrl || imageUrl.trim() === '') {
@@ -85,63 +49,73 @@ const getImageUrl = (imageUrl: string | null): string => {
   return `${SERVER_URL}${imageUrl}`;
 };
 
-const getSafeLocation = async (): Promise<{ latitude: number; longitude: number } | null> => {
-  try {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') return null;
-
-    const pos = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
-    });
-
-    return {
-      latitude: pos.coords.latitude,
-      longitude: pos.coords.longitude,
-    };
-  } catch {
-    return null;
-  }
-};
-
 export default function HomeScreen({ navigation }: HomeScreenProps) {
   const mapRef = useRef<MapView>(null);
+  const locationWatcherRef = useRef<Location.LocationSubscription | null>(null);
+  const isScreenActiveRef = useRef(false);
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
 
+  const startWatchingLocation = useCallback(async () => {
+    try {
+      if (locationWatcherRef.current) {
+        locationWatcherRef.current.remove();
+        locationWatcherRef.current = null;
+      }
+
+      const pos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+      setLocation(coords);
+      setLocationError(null);
+      mapRef.current?.animateToRegion(
+        { ...coords, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
+        800,
+      );
+
+      const watcher = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.Balanced,
+          distanceInterval: 20,
+          timeInterval: 7000,
+        },
+        (newPos) => {
+          if (!isScreenActiveRef.current) return;
+          const newCoords = {
+            latitude: newPos.coords.latitude,
+            longitude: newPos.coords.longitude,
+          };
+          setLocation(newCoords);
+          mapRef.current?.animateToRegion(
+            { ...newCoords, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
+            800,
+          );
+        }
+      );
+      locationWatcherRef.current = watcher;
+    } catch {
+      setLocationError('Ubication is required to use the app');
+    }
+  }, []);
+
   const handleRequestLocation = useCallback(async () => {
     try {
       const existing = await Location.getForegroundPermissionsAsync();
       if (existing.granted) {
-        const pos = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-        const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-        setLocation(coords);
-        setLocationError(null);
-        mapRef.current?.animateToRegion(
-          { ...coords, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
-          800,
-        );
+        await startWatchingLocation();
         return;
       }
 
       if (existing.canAskAgain) {
         const request = await Location.requestForegroundPermissionsAsync();
         if (request.granted) {
-          const pos = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          });
-          const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-          setLocation(coords);
-          setLocationError(null);
-          mapRef.current?.animateToRegion(
-            { ...coords, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
-            800,
-          );
+          await startWatchingLocation();
         } else {
+          setLocation(null);
           setLocationError('Ubication is required to use the app');
         }
         return;
@@ -151,57 +125,54 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     } catch {
       setLocationError('Ubication is required to use the app');
     }
-  }, []);
+  }, [startWatchingLocation]);
 
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
+      isScreenActiveRef.current = true;
 
-      const loadScreenData = async () => {
+      const initialize = async () => {
         setLoading(true);
 
         try {
-          const [profileData, coords] = await Promise.all([getMyProfile(), getSafeLocation()]);
-
-          if (cancelled) return;
-
+          const profileData = await getMyProfile();
+          if (!isScreenActiveRef.current) return;
           setProfile(profileData);
 
-          if (coords) {
-            setLocation(coords);
-            setLocationError(null);
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (!isScreenActiveRef.current) return;
 
-            mapRef.current?.animateToRegion(
-              {
-                latitude: coords.latitude,
-                longitude: coords.longitude,
-                latitudeDelta: DEFAULT_DELTA,
-                longitudeDelta: DEFAULT_DELTA,
-              },
-              800,
-            );
-          } else {
+          if (status !== 'granted') {
             setLocation(null);
             setLocationError('Ubication is required to use the app');
-            mapRef.current?.animateToRegion(DEFAULT_REGION, 800);
+            if (isScreenActiveRef.current) setLoading(false);
+            return;
           }
+
+          await startWatchingLocation();
         } catch {
-          if (!cancelled) {
+          if (isScreenActiveRef.current) {
             setProfile(null);
             setLocation(null);
             setLocationError(null);
           }
         } finally {
-          if (!cancelled) setLoading(false);
+          if (isScreenActiveRef.current) {
+            setLoading(false);
+          }
         }
       };
 
-      loadScreenData();
+      initialize();
 
       return () => {
-        cancelled = true;
+        isScreenActiveRef.current = false;
+        if (locationWatcherRef.current) {
+          locationWatcherRef.current.remove();
+          locationWatcherRef.current = null;
+        }
       };
-    }, []),
+    }, [startWatchingLocation])
   );
 
   if (loading) {
@@ -212,81 +183,23 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     );
   }
 
-  const showMarker = location && profile;
+  const currentUser = location && profile
+    ? { profile, coordinate: location }
+    : undefined;
 
-  const hiddenLocation = {
-    latitude: ANTARCTICA_REGION.latitude,
-    longitude: ANTARCTICA_REGION.longitude,
-  };
+  const initialRegion = location
+    ? { ...location, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA }
+    : DEFAULT_REGION;
 
   return (
     <View style={styles.root}>
       <StatusBar barStyle="light-content" />
 
-      <MapView
+      <LiveMap
         ref={mapRef}
-        style={StyleSheet.absoluteFillObject}
-        provider={PROVIDER_DEFAULT}
-        customMapStyle={Platform.OS === 'android' ? DARK_MAP_STYLE : undefined}
-        initialRegion={
-          location
-            ? { ...location, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA }
-            : DEFAULT_REGION
-        }
-        showsCompass={false}
-        showsScale={false}
-        showsUserLocation={false}
-        showsMyLocationButton={false}
-        userInterfaceStyle="dark"
-        pitchEnabled={false}
-        toolbarEnabled={false}
-      >
-        {showMarker && (
-          <Marker
-            coordinate={location}
-            anchor={{ x: 0.5, y: 1 }}
-          >
-            <View style={styles.markerContent}>
-              <View style={styles.bubbleArea}>
-                <View style={[
-                  styles.speechBubble,
-                  (!profile.message || profile.message.trim() === '') && styles.hidden,
-                ]}>
-                  <Text style={styles.speechText} numberOfLines={3}>
-                    {profile.message?.trim() || ''}
-                  </Text>
-                </View>
-                <View style={[
-                  styles.speechTailDown,
-                  (!profile.message || profile.message.trim() === '') && styles.hidden,
-                ]} />
-              </View>
-              <View style={styles.avatarOuter}>
-                <Image
-                  source={{ uri: getImageUrl(profile.imageUrl) }}
-                  style={styles.avatarImg}
-                  resizeMode="cover"
-                  onError={() => setProfile({ ...profile, imageUrl: null })}
-                />
-              </View>
-              <View style={styles.pinStem} />
-              <View style={styles.pinDot} />
-            </View>
-          </Marker>
-        )}
-
-        {!showMarker && profile && (
-          <Marker coordinate={hiddenLocation}>
-            <View style={styles.avatarOuter}>
-              <Image
-                source={{ uri: getImageUrl(profile.imageUrl) }}
-                style={styles.avatarImg}
-                resizeMode="cover"
-              />
-            </View>
-          </Marker>
-        )}
-      </MapView>
+        initialRegion={initialRegion}
+        currentUser={currentUser}
+      />
 
       {locationError && (
         <View style={styles.errorRow}>
@@ -343,50 +256,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#0e1626',
   },
 
-  markerContent: {
-    alignItems: 'center',
-    width: MARKER_W,
-  },
-  bubbleArea: {
-    width: MARKER_W,
-    height: 68,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    marginBottom: 4,
-    position: 'relative',
-  },
-  avatarOuter: {
-    width: AVATAR_SIZE + BORDER_WIDTH * 2,
-    height: AVATAR_SIZE + BORDER_WIDTH * 2,
-    borderRadius: (AVATAR_SIZE + BORDER_WIDTH * 2) / 2,
-    backgroundColor: theme.colors.primary,
-    padding: BORDER_WIDTH,
-    //overflow: 'hidden', 
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarImg: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-    borderRadius: AVATAR_SIZE / 2,
-    backgroundColor: theme.colors.surfaceAlt,
-    overflow: 'hidden',
-  },
-  pinStem: {
-    width: 3,
-    height: 12,
-    backgroundColor: theme.colors.primary,
-    borderRadius: 2,
-    marginTop: -1,
-  },
-  pinDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    marginTop: -2,
-  },
-
   floatButtonLeft: {
     position: 'absolute',
     top: Platform.OS === 'ios' ? 76 : 44,
@@ -421,43 +290,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-
-  speechBubble: {
-    position: 'absolute',
-    bottom: 6,
-    left: '32%',
-    marginLeft: BUBBLE_SHIFT,
-    maxWidth: 200,
-    backgroundColor: 'rgba(255, 255, 255, 1)',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(66, 67, 69, 0.25)',
-  },
-  hidden: {
-    opacity: 0,
-  },
-  speechText: {
-    color: '#000000',
-    fontSize: 12,
-    fontWeight: '500',
-    lineHeight: 16,
-  },
-  speechTailDown: {
-    position: 'absolute',
-    bottom: 0,
-    left: '50%',
-    marginLeft: -5,
-    width: 0,
-    height: 0,
-    borderLeftWidth: 5,
-    borderRightWidth: 5,
-    borderTopWidth: 6,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: 'rgba(255, 255, 255, 1)',
   },
 
   errorRow: {
