@@ -2,6 +2,7 @@ import 'dotenv/config';
 import http from 'http';
 import app from './app';
 import { setupSocket } from './websocket/socket';
+import { registerLocationSocketHandlers } from './features/location/location.socket';
 import { prisma } from './shared/lib/prisma';
 import redis from './shared/lib/redis';
 
@@ -24,7 +25,8 @@ async function main() {
 
   // Create HTTP server and setup WebSocket
   const httpServer = http.createServer(app);
-  const _io = setupSocket(httpServer);
+  const io = setupSocket(httpServer);
+  registerLocationSocketHandlers(io);
 
   httpServer.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
