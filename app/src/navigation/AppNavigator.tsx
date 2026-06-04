@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { useState, useEffect, useRef } from 'react';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import * as Notifications from 'expo-notifications';
 import AuthLoadingScreen from '../screens/AuthLoadingScreen';
 import HomeScreen from '../screens/HomeScreen';
 import ProfileScreen from '../screens/ProfileScreen';
@@ -12,16 +13,69 @@ export type RootStackParamList = {
   AuthLoading: undefined;
   Home: undefined;
   Profile: undefined;
-  ConnectedMap: { range: number; durationMinutes: number };
+  ConnectedMap: { range?: number; durationMinutes?: number };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
+export const navigationRef = createNavigationContainerRef<RootStackParamList>();
+
 export default function AppNavigator() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const notificationListenerRef = useRef<Notifications.Subscription | null>(null);
+  const responseListenerRef = useRef<Notifications.Subscription | null>(null);
 
   useEffect(() => {
     checkExistingSession();
+  }, []);
+
+  useEffect(() => {
+    // Request notification permissions (best-effort; may fail in test envs)
+    Notifications.requestPermissionsAsync().catch(() => {});
+
+    try {
+      // Foreground notification listener
+      notificationListenerRef.current = Notifications.addNotificationReceivedListener(() => {
+        // Optional: suppress or customize foreground notification display
+      });
+    } catch { /* ignore in test envs */ }
+
+    try {
+      // Notification response listener: handle taps on scheduled notifications
+      responseListenerRef.current = Notifications.addNotificationResponseReceivedListener((response) => {
+        const title = response.notification.request.content.title;
+        if (title === 'Disconnected from map') {
+          if (navigationRef.isReady()) {
+            navigationRef.navigate('Home');
+          }
+        }
+      });
+    } catch { /* ignore in test envs */ }
+
+    // Check if app was opened from a notification
+    Notifications.getLastNotificationResponseAsync()
+      .then((response) => {
+        const title = response?.notification.request.content.title;
+        if (title === 'Disconnected from map') {
+          if (navigationRef.isReady()) {
+            navigationRef.navigate('Home');
+          }
+        }
+      })
+      .catch(() => { /* ignore in test envs */ });
+
+    return () => {
+      if (notificationListenerRef.current) {
+        try {
+          notificationListenerRef.current.remove();
+        } catch { /* ignore */ }
+      }
+      if (responseListenerRef.current) {
+        try {
+          responseListenerRef.current.remove();
+        } catch { /* ignore */ }
+      }
+    };
   }, []);
 
   const checkExistingSession = async () => {
@@ -46,7 +100,7 @@ export default function AppNavigator() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {isAuthenticated ? (
           [
