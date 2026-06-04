@@ -4,7 +4,6 @@ import {
   View,
   Image,
   TouchableOpacity,
-  ActivityIndicator,
   Platform,
   StatusBar,
   Text,
@@ -12,6 +11,7 @@ import {
 } from 'react-native';
 import MapView, { type Region } from 'react-native-maps';
 import * as Location from 'expo-location';
+import * as SecureStore from 'expo-secure-store';
 import { useFocusEffect } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -29,6 +29,12 @@ interface HomeScreenProps {
 
 const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL || 'http://localhost:3000';
 const DEFAULT_AVATAR = '/defaults/default-avatar.png';
+
+const CACHE_KEYS = {
+  profile: 'profile_cache',
+  location: 'last_location_cache',
+  permission: 'location_permission_status',
+};
 
 const DEFAULT_REGION: Region = {
   latitude: 37.38,
@@ -55,7 +61,6 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const isScreenActiveRef = useRef(false);
 
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
 
@@ -72,6 +77,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
       setLocation(coords);
       setLocationError(null);
+      await SecureStore.setItemAsync(CACHE_KEYS.location, JSON.stringify(coords));
       mapRef.current?.animateToRegion(
         { ...coords, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
         800,
@@ -90,6 +96,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             longitude: newPos.coords.longitude,
           };
           setLocation(newCoords);
+          SecureStore.setItemAsync(CACHE_KEYS.location, JSON.stringify(newCoords)).catch(() => {});
           mapRef.current?.animateToRegion(
             { ...newCoords, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
             800,
@@ -112,6 +119,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
       if (existing.canAskAgain) {
         const request = await Location.requestForegroundPermissionsAsync();
+        await SecureStore.setItemAsync(CACHE_KEYS.permission, request.status);
         if (request.granted) {
           await startWatchingLocation();
         } else {
@@ -131,36 +139,58 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     useCallback(() => {
       isScreenActiveRef.current = true;
 
-      const initialize = async () => {
-        setLoading(true);
+      const loadCachedData = async () => {
+        try {
+          const cachedProfile = await SecureStore.getItemAsync(CACHE_KEYS.profile);
+          if (cachedProfile) {
+            setProfile(JSON.parse(cachedProfile));
+          }
+        } catch { /* ignore cache read errors */ }
 
+        try {
+          const cachedLocation = await SecureStore.getItemAsync(CACHE_KEYS.location);
+          if (cachedLocation) {
+            setLocation(JSON.parse(cachedLocation));
+          }
+        } catch { /* ignore cache read errors */ }
+      };
+
+      const refreshInBackground = async () => {
         try {
           const profileData = await getMyProfile();
           if (!isScreenActiveRef.current) return;
           setProfile(profileData);
+          await SecureStore.setItemAsync(CACHE_KEYS.profile, JSON.stringify(profileData));
+        } catch { /* ignore network errors, keep cached profile */ }
 
-          const { status } = await Location.requestForegroundPermissionsAsync();
-          if (!isScreenActiveRef.current) return;
+        try {
+          const cachedPermission = await SecureStore.getItemAsync(CACHE_KEYS.permission);
+          let granted = cachedPermission === 'granted';
 
-          if (status !== 'granted') {
+          if (!granted) {
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (!isScreenActiveRef.current) return;
+            granted = status === 'granted';
+            await SecureStore.setItemAsync(CACHE_KEYS.permission, status);
+          }
+
+          if (granted) {
+            await startWatchingLocation();
+          } else {
             setLocation(null);
             setLocationError('Ubication is required to use the app');
-            if (isScreenActiveRef.current) setLoading(false);
-            return;
           }
-
-          await startWatchingLocation();
         } catch {
           if (isScreenActiveRef.current) {
-            setProfile(null);
             setLocation(null);
-            setLocationError(null);
-          }
-        } finally {
-          if (isScreenActiveRef.current) {
-            setLoading(false);
+            setLocationError('Ubication is required to use the app');
           }
         }
+      };
+
+      const initialize = async () => {
+        await loadCachedData();
+        refreshInBackground();
       };
 
       initialize();
@@ -174,14 +204,6 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       };
     }, [startWatchingLocation])
   );
-
-  if (loading) {
-    return (
-      <View style={styles.loadingRoot}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-      </View>
-    );
-  }
 
   const currentUser = location && profile
     ? { profile, coordinate: location }
@@ -222,13 +244,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         onPress={() => navigation.navigate('Profile')}
         activeOpacity={0.75}
       >
-        {profile ? (
-          <Image source={{ uri: getImageUrl(profile.imageUrl) }} style={styles.floatButtonImg} />
-        ) : (
-          <View style={styles.floatButtonFallback}>
-            <Feather name="user" size={22} color={theme.colors.text} />
-          </View>
-        )}
+        <Image source={{ uri: `${SERVER_URL}${DEFAULT_AVATAR}` }} style={styles.floatButtonImg} />
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.floatButtonRight} activeOpacity={0.75}>
@@ -245,12 +261,6 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 }
 
 const styles = StyleSheet.create({
-  loadingRoot: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.background,
-  },
   root: {
     flex: 1,
     backgroundColor: '#0e1626',
