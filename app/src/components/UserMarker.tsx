@@ -38,7 +38,7 @@ export default function UserMarker({ coordinate, profile, isSelf = false }: User
 
   const imageUri = hasError ? `${SERVER_URL}${DEFAULT_AVATAR}` : getImageUrl(profile.imageUrl);
   const showBubble = !!profile.message && profile.message.trim() !== '';
-  const accentColor = isSelf ? '#22d3ee' : theme.colors.primary;
+  const accentColor = isSelf ? '#22d3ee' : '#384954ff';
 
   return (
     <Marker coordinate={coordinate} anchor={{ x: 0.5, y: 1 }}>

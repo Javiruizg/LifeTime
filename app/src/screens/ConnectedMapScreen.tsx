@@ -60,13 +60,22 @@ const getImageUrl = (imageUrl: string | null): string => {
 export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenProps) {
   const mapRef = useRef<MapView>(null);
   const isActiveRef = useRef(true);
-  const hasReceivedUsersRef = useRef(false);
+  const hasProfileRef = useRef(false);
+  const hasLocationRef = useRef(false);
+  const hasUsersRef = useRef(false);
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [otherUsers, setOtherUsers] = useState<VisibleUserPayload[]>([]);
   const [isInitializing, setIsInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const maybeHideSpinner = useCallback(() => {
+    if (!isActiveRef.current) return;
+    if (hasProfileRef.current && hasLocationRef.current && hasUsersRef.current) {
+      setIsInitializing(false);
+    }
+  }, []);
 
   const handleSessionExpired = useCallback(async () => {
     if (!isActiveRef.current) return;
@@ -95,6 +104,7 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
           const cachedProfile = await SecureStore.getItemAsync(CACHE_KEYS.profile);
           if (cachedProfile) {
             setProfile(JSON.parse(cachedProfile));
+            hasProfileRef.current = true;
           }
         } catch { /* ignore cache read errors */ }
 
@@ -102,6 +112,7 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
           const profileData = await getMyProfile();
           setProfile(profileData);
           await SecureStore.setItemAsync(CACHE_KEYS.profile, JSON.stringify(profileData));
+          hasProfileRef.current = true;
         } catch { /* ignore network errors */ }
       };
 
@@ -115,13 +126,31 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
     const initialize = async () => {
       setIsInitializing(true);
       setError(null);
+      hasProfileRef.current = false;
+      hasLocationRef.current = false;
+      hasUsersRef.current = false;
 
       try {
+        // 0. Load cached location immediately so map centers fast
+        try {
+          const cachedLocation = await SecureStore.getItemAsync('last_location_cache');
+          if (cachedLocation) {
+            const coords = JSON.parse(cachedLocation);
+            if (!isActiveRef.current) return;
+            setLocation(coords);
+            hasLocationRef.current = true;
+            maybeHideSpinner();
+          }
+        } catch { /* ignore cache read errors */ }
+
         // 1. Load cached profile instantly
         try {
           const cachedProfile = await SecureStore.getItemAsync(CACHE_KEYS.profile);
           if (cachedProfile) {
+            if (!isActiveRef.current) return;
             setProfile(JSON.parse(cachedProfile));
+            hasProfileRef.current = true;
+            maybeHideSpinner();
           }
         } catch { /* ignore cache read errors */ }
 
@@ -131,7 +160,15 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
           if (!isActiveRef.current) return;
           setProfile(profileData);
           await SecureStore.setItemAsync(CACHE_KEYS.profile, JSON.stringify(profileData));
+          hasProfileRef.current = true;
+          maybeHideSpinner();
         } catch { /* ignore network errors, keep cached profile */ }
+
+        // If profile still not loaded, mark as attempted so spinner doesn't block forever
+        if (!hasProfileRef.current) {
+          hasProfileRef.current = true;
+          maybeHideSpinner();
+        }
 
         // 3. Verify active session
         const status = await getLocationStatus();
@@ -150,6 +187,10 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
             { ...coords, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
             800
           );
+          if (!hasLocationRef.current) {
+            hasLocationRef.current = true;
+            maybeHideSpinner();
+          }
         });
 
         if (!isActiveRef.current) return;
@@ -172,11 +213,11 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
         // 6. Listen for visible users
         getSocket()?.on('location:users', (users: VisibleUserPayload[]) => {
           if (!isActiveRef.current) return;
-          if (!hasReceivedUsersRef.current) {
-            hasReceivedUsersRef.current = true;
-            setIsInitializing(false);
-          }
           setOtherUsers(users);
+          if (!hasUsersRef.current) {
+            hasUsersRef.current = true;
+            maybeHideSpinner();
+          }
         });
 
         // 7. Listen for session expiry
@@ -184,20 +225,9 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
           if (!isActiveRef.current) return;
           handleSessionExpired();
         });
-
-        // 8. Fallback: hide spinner after 8s even if no users event arrived
-        setTimeout(() => {
-          if (isActiveRef.current && !hasReceivedUsersRef.current) {
-            hasReceivedUsersRef.current = true;
-            setIsInitializing(false);
-          }
-        }, 8000);
       } catch (err) {
         if (isActiveRef.current) {
           setError('Failed to initialize connected map. Please try again.');
-        }
-      } finally {
-        if (isActiveRef.current && hasReceivedUsersRef.current) {
           setIsInitializing(false);
         }
       }
@@ -211,7 +241,7 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
       getSocket()?.off('location:session_expired');
       stopSharing();
     };
-  }, [navigation, handleSessionExpired]);
+  }, [navigation, handleSessionExpired, maybeHideSpinner]);
 
   if (error) {
     return (
