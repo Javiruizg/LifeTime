@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Platform,
   StatusBar,
+  Text,
 } from 'react-native';
 import MapView, { Marker, type Region, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -68,7 +69,12 @@ const DARK_MAP_STYLE = [
 
 const AVATAR_SIZE = 44;
 const BORDER_WIDTH = 3;
-const PROFILE_BUTTON_SIZE = 44;
+const PROFILE_BUTTON_SIZE = 60;
+
+const AVATAR_OUTER = AVATAR_SIZE + BORDER_WIDTH * 2;
+const BUBBLE_MAX_W = 220;
+const BUBBLE_SHIFT = 20;
+const MARKER_W = BUBBLE_MAX_W + BUBBLE_SHIFT + AVATAR_OUTER;
 
 const getImageUrl = (imageUrl: string | null): string => {
   if (!imageUrl || imageUrl.trim() === '') {
@@ -197,7 +203,21 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             coordinate={location}
             anchor={{ x: 0.5, y: 1 }}
           >
-            <View style={styles.pinRoot}>
+            <View style={styles.markerContent}>
+              <View style={styles.bubbleArea}>
+                <View style={[
+                  styles.speechBubble,
+                  (!profile.message || profile.message.trim() === '') && styles.hidden,
+                ]}>
+                  <Text style={styles.speechText} numberOfLines={3}>
+                    {profile.message?.trim() || ''}
+                  </Text>
+                </View>
+                <View style={[
+                  styles.speechTailDown,
+                  (!profile.message || profile.message.trim() === '') && styles.hidden,
+                ]} />
+              </View>
               <View style={styles.avatarOuter}>
                 <Image
                   source={{ uri: getImageUrl(profile.imageUrl) }}
@@ -260,8 +280,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#0e1626',
   },
 
-  pinRoot: {
+  markerContent: {
     alignItems: 'center',
+    width: MARKER_W,
+  },
+  bubbleArea: {
+    width: MARKER_W,
+    height: 68,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginBottom: 4,
+    position: 'relative',
   },
   avatarOuter: {
     width: AVATAR_SIZE + BORDER_WIDTH * 2,
@@ -297,8 +326,8 @@ const styles = StyleSheet.create({
 
   profileButton: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 56 : 20,
-    left: 16,
+    top: Platform.OS === 'ios' ? 85 : 60,
+    left: 40,
     width: PROFILE_BUTTON_SIZE,
     height: PROFILE_BUTTON_SIZE,
     borderRadius: PROFILE_BUTTON_SIZE / 2,
@@ -317,6 +346,43 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  speechBubble: {
+    position: 'absolute',
+    bottom: 6,
+    left: '32%',
+    marginLeft: BUBBLE_SHIFT,
+    maxWidth: 200,
+    backgroundColor: 'rgba(255, 255, 255, 1)',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(66, 67, 69, 0.25)',
+  },
+  hidden: {
+    opacity: 0,
+  },
+  speechText: {
+    color: '#000000',
+    fontSize: 12,
+    fontWeight: '500',
+    lineHeight: 16,
+  },
+  speechTailDown: {
+    position: 'absolute',
+    bottom: 0,
+    left: '50%',
+    marginLeft: -5,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 5,
+    borderRightWidth: 5,
+    borderTopWidth: 6,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: 'rgba(255, 255, 255, 1)',
   },
 
   errorBadge: {
