@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   StyleSheet,
   View,
+  Image,
   Text,
   TouchableOpacity,
   Alert,
@@ -12,6 +13,7 @@ import {
 import MapView, { type Region } from 'react-native-maps';
 import * as SecureStore from 'expo-secure-store';
 import * as Notifications from 'expo-notifications';
+import { useFocusEffect } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -43,14 +45,27 @@ const DEFAULT_REGION: Region = {
   longitudeDelta: 0.05,
 };
 
+const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL || 'http://localhost:3000';
+const DEFAULT_AVATAR = '/defaults/default-avatar.png';
+const FLOAT_BUTTON_SIZE = 56;
+
+const getImageUrl = (imageUrl: string | null): string => {
+  if (!imageUrl || imageUrl.trim() === '') {
+    return `${SERVER_URL}${DEFAULT_AVATAR}`;
+  }
+  if (imageUrl.startsWith('http')) return imageUrl;
+  return `${SERVER_URL}${imageUrl}`;
+};
+
 export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenProps) {
   const mapRef = useRef<MapView>(null);
   const isActiveRef = useRef(true);
+  const hasReceivedUsersRef = useRef(false);
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [otherUsers, setOtherUsers] = useState<VisibleUserPayload[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isInitializing, setIsInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const handleSessionExpired = useCallback(async () => {
@@ -72,11 +87,33 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
     navigation.replace('Home');
   }, [navigation]);
 
+  // Refresh profile whenever screen regains focus (e.g. after editing in ProfileScreen)
+  useFocusEffect(
+    useCallback(() => {
+      const refreshProfile = async () => {
+        try {
+          const cachedProfile = await SecureStore.getItemAsync(CACHE_KEYS.profile);
+          if (cachedProfile) {
+            setProfile(JSON.parse(cachedProfile));
+          }
+        } catch { /* ignore cache read errors */ }
+
+        try {
+          const profileData = await getMyProfile();
+          setProfile(profileData);
+          await SecureStore.setItemAsync(CACHE_KEYS.profile, JSON.stringify(profileData));
+        } catch { /* ignore network errors */ }
+      };
+
+      refreshProfile();
+    }, [])
+  );
+
   useEffect(() => {
     isActiveRef.current = true;
 
     const initialize = async () => {
-      setLoading(true);
+      setIsInitializing(true);
       setError(null);
 
       try {
@@ -135,6 +172,10 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
         // 6. Listen for visible users
         getSocket()?.on('location:users', (users: VisibleUserPayload[]) => {
           if (!isActiveRef.current) return;
+          if (!hasReceivedUsersRef.current) {
+            hasReceivedUsersRef.current = true;
+            setIsInitializing(false);
+          }
           setOtherUsers(users);
         });
 
@@ -143,13 +184,21 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
           if (!isActiveRef.current) return;
           handleSessionExpired();
         });
+
+        // 8. Fallback: hide spinner after 8s even if no users event arrived
+        setTimeout(() => {
+          if (isActiveRef.current && !hasReceivedUsersRef.current) {
+            hasReceivedUsersRef.current = true;
+            setIsInitializing(false);
+          }
+        }, 8000);
       } catch (err) {
         if (isActiveRef.current) {
           setError('Failed to initialize connected map. Please try again.');
         }
       } finally {
-        if (isActiveRef.current) {
-          setLoading(false);
+        if (isActiveRef.current && hasReceivedUsersRef.current) {
+          setIsInitializing(false);
         }
       }
     };
@@ -163,14 +212,6 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
       stopSharing();
     };
   }, [navigation, handleSessionExpired]);
-
-  if (loading) {
-    return (
-      <View style={styles.loadingRoot}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-      </View>
-    );
-  }
 
   if (error) {
     return (
@@ -217,6 +258,30 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
         otherUsers={mappedOtherUsers}
       />
 
+      {isInitializing && (
+        <View style={styles.topLoader}>
+          <ActivityIndicator size="small" color={theme.colors.primary} />
+        </View>
+      )}
+
+      <TouchableOpacity
+        style={styles.floatButtonLeft}
+        onPress={() => navigation.navigate('Profile')}
+        activeOpacity={0.75}
+      >
+        <Image source={{ uri: `${SERVER_URL}${DEFAULT_AVATAR}` }} style={styles.floatButtonImg} />
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.floatButtonRight} activeOpacity={0.75}>
+        {profile ? (
+          <Image source={{ uri: getImageUrl(profile.imageUrl) }} style={styles.floatButtonImg} />
+        ) : (
+          <View style={styles.floatButtonFallback}>
+            <Feather name="users" size={22} color={theme.colors.text} />
+          </View>
+        )}
+      </TouchableOpacity>
+
       <TouchableOpacity
         style={styles.disconnectButton}
         onPress={handleDisconnect}
@@ -232,12 +297,6 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
 const DISCONNECT_BUTTON_HEIGHT = 48;
 
 const styles = StyleSheet.create({
-  loadingRoot: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.background,
-  },
   errorRoot: {
     flex: 1,
     alignItems: 'center',
@@ -265,6 +324,47 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: '#0e1626',
+  },
+  floatButtonLeft: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 76 : 44,
+    left: 20,
+    width: FLOAT_BUTTON_SIZE,
+    height: FLOAT_BUTTON_SIZE,
+    borderRadius: FLOAT_BUTTON_SIZE / 2,
+    overflow: 'hidden',
+    borderWidth: 6,
+    borderColor: 'rgba(0, 0, 0, 1)',
+    ...theme.shadows.md,
+  },
+  floatButtonRight: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 76 : 44,
+    right: 20,
+    width: FLOAT_BUTTON_SIZE,
+    height: FLOAT_BUTTON_SIZE,
+    borderRadius: FLOAT_BUTTON_SIZE / 2,
+    overflow: 'hidden',
+    borderWidth: 6,
+    borderColor: 'rgba(0, 0, 0, 1)',
+    ...theme.shadows.md,
+  },
+  floatButtonImg: {
+    width: '100%',
+    height: '100%',
+  },
+  floatButtonFallback: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: theme.colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  topLoader: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 88 : 56,
+    alignSelf: 'center',
+    zIndex: 100,
   },
   disconnectButton: {
     position: 'absolute',

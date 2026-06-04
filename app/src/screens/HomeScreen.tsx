@@ -8,6 +8,8 @@ import {
   StatusBar,
   Text,
   Linking,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import MapView, { type Region } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -21,7 +23,7 @@ import type { Profile } from '../features/profile/profile.types';
 import { theme } from '../shared/lib/theme';
 import LiveMap from '../components/LiveMap';
 import ConnectModal from '../components/ConnectModal';
-import { getLocationStatus } from '../features/location/location.api';
+import { getLocationStatus, connectToLocation } from '../features/location/location.api';
 import type { LocationRange, LocationDuration } from '../features/location/location.types';
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
@@ -66,6 +68,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
 
   const startWatchingLocation = useCallback(async () => {
@@ -176,34 +179,42 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       };
 
       const refreshInBackground = async () => {
+        if (!isScreenActiveRef.current) return;
+        setIsRefreshing(true);
         try {
-          const profileData = await getMyProfile();
-          if (!isScreenActiveRef.current) return;
-          setProfile(profileData);
-          await SecureStore.setItemAsync(CACHE_KEYS.profile, JSON.stringify(profileData));
-        } catch { /* ignore network errors, keep cached profile */ }
-
-        try {
-          const cachedPermission = await SecureStore.getItemAsync(CACHE_KEYS.permission);
-          let granted = cachedPermission === 'granted';
-
-          if (!granted) {
-            const { status } = await Location.requestForegroundPermissionsAsync();
+          try {
+            const profileData = await getMyProfile();
             if (!isScreenActiveRef.current) return;
-            granted = status === 'granted';
-            await SecureStore.setItemAsync(CACHE_KEYS.permission, status);
-          }
+            setProfile(profileData);
+            await SecureStore.setItemAsync(CACHE_KEYS.profile, JSON.stringify(profileData));
+          } catch { /* ignore network errors, keep cached profile */ }
 
-          if (granted) {
-            await startWatchingLocation();
-          } else {
-            setLocation(null);
-            setLocationError('Ubication is required to use the app');
+          try {
+            const cachedPermission = await SecureStore.getItemAsync(CACHE_KEYS.permission);
+            let granted = cachedPermission === 'granted';
+
+            if (!granted) {
+              const { status } = await Location.requestForegroundPermissionsAsync();
+              if (!isScreenActiveRef.current) return;
+              granted = status === 'granted';
+              await SecureStore.setItemAsync(CACHE_KEYS.permission, status);
+            }
+
+            if (granted) {
+              await startWatchingLocation();
+            } else {
+              setLocation(null);
+              setLocationError('Ubication is required to use the app');
+            }
+          } catch {
+            if (isScreenActiveRef.current) {
+              setLocation(null);
+              setLocationError('Ubication is required to use the app');
+            }
           }
-        } catch {
+        } finally {
           if (isScreenActiveRef.current) {
-            setLocation(null);
-            setLocationError('Ubication is required to use the app');
+            setIsRefreshing(false);
           }
         }
       };
@@ -261,6 +272,12 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         </View>
       )}
 
+      {isRefreshing && (
+        <View style={styles.topLoader}>
+          <ActivityIndicator size="small" color={theme.colors.primary} />
+        </View>
+      )}
+
       <TouchableOpacity
         style={styles.floatButtonLeft}
         onPress={() => navigation.navigate('Profile')}
@@ -292,9 +309,14 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       <ConnectModal
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
-        onConfirm={(range: LocationRange, durationMinutes: LocationDuration) => {
+        onConfirm={async (range: LocationRange, durationMinutes: LocationDuration) => {
           setModalVisible(false);
-          navigation.navigate('ConnectedMap', { range, durationMinutes });
+          try {
+            await connectToLocation({ range, durationMinutes });
+            navigation.navigate('ConnectedMap', { range, durationMinutes });
+          } catch {
+            Alert.alert('Connection failed', 'Could not connect to the map. Please try again.');
+          }
         }}
       />
     </View>
@@ -341,6 +363,12 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  topLoader: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 88 : 56,
+    alignSelf: 'center',
+    zIndex: 100,
   },
 
   errorRow: {

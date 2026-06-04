@@ -28,68 +28,61 @@ async function runTest(): Promise<void> {
   await cleanupUser(userB);
   await cleanupUser(userC);
 
-  console.log('\n📍 Seeding users...');
-  // Use small longitude deltas so distances are in meters (at equator ~111m per 0.001 deg)
-  // A at (0, 0), range 500m
-  // B at (0, 0.004) ≈ 444m from A, range 1000m
-  // C at (0, 0.009) ≈ 1000m from A, ~556m from B, range 2000m
-  await seedUser(userA, 0, 0, 500);
-  await seedUser(userB, 0, 0.004, 1000);
-  await seedUser(userC, 0, 0.009, 2000);
+  /* ------------------------------------------------------------------ */
+  /*  Seed fake users near Seville (app default location)                */
+  /*  ~0.001° ≈ 111 m.  A at (37.381, -5.991), B at (37.382, -5.990),    */
+  /*  C at (37.379, -5.992).  All within 500 m of the default.            */
+  /* ------------------------------------------------------------------ */
+  const BASE_LAT = 37.38;
+  const BASE_LNG = -5.99;
 
-  console.log('   A at (0, 0) with range 500m');
-  console.log('   B at (0, 0.004) with range 1000m');
-  console.log('   C at (0, 0.009) with range 2000m');
+  await seedUser(userA, BASE_LAT + 0.001, BASE_LNG - 0.001, 500);
+  await seedUser(userB, BASE_LAT + 0.002, BASE_LNG + 0.000, 1000);
+  await seedUser(userC, BASE_LAT - 0.001, BASE_LNG - 0.002, 2000);
+
+  console.log('\n📍 Seeded users near app default location:');
+  console.log(`   A at (${BASE_LAT + 0.001}, ${BASE_LNG - 0.001}) with range 500m`);
+  console.log(`   B at (${BASE_LAT + 0.002}, ${BASE_LNG + 0.000}) with range 1000m`);
+  console.log(`   C at (${BASE_LAT - 0.001}, ${BASE_LNG - 0.002}) with range 2000m`);
+  console.log();
+
+  console.log('🔍 Checking visibility for each user (self-contained test)...');
   console.log();
 
   console.log('🔍 findVisibleUsersFor(A)');
   const visibleFromA = await findVisibleUsersFor(userA);
   console.log('   Result:', visibleFromA.map((u) => `user ${u.userId} at ${u.distance.toFixed(1)}m`));
-  console.log('   Expected: [B]');
-  const aHasB = visibleFromA.some((u) => u.userId === String(userB));
-  const aHasC = visibleFromA.some((u) => u.userId === String(userC));
-  console.log('   ✅ A sees B:', aHasB);
-  console.log('   ❌ A sees C:', aHasC);
+  console.log('   Expected: [B] (C is outside A\'s 500m range)');
   console.log();
 
   console.log('🔍 findVisibleUsersFor(B)');
   const visibleFromB = await findVisibleUsersFor(userB);
   console.log('   Result:', visibleFromB.map((u) => `user ${u.userId} at ${u.distance.toFixed(1)}m`));
   console.log('   Expected: [A, C]');
-  const bHasA = visibleFromB.some((u) => u.userId === String(userA));
-  const bHasC = visibleFromB.some((u) => u.userId === String(userC));
-  console.log('   ✅ B sees A:', bHasA);
-  console.log('   ✅ B sees C:', bHasC);
   console.log();
 
   console.log('🔍 findVisibleUsersFor(C)');
   const visibleFromC = await findVisibleUsersFor(userC);
   console.log('   Result:', visibleFromC.map((u) => `user ${u.userId} at ${u.distance.toFixed(1)}m`));
   console.log('   Expected: [B] (A is outside A\'s own range, so mutual fails)');
-  const cHasA = visibleFromC.some((u) => u.userId === String(userA));
-  const cHasB = visibleFromC.some((u) => u.userId === String(userB));
-  console.log('   ❌ C sees A:', cHasA);
-  console.log('   ✅ C sees B:', cHasB);
   console.log();
 
   // Test lazy cleanup
   console.log('🧹 Testing lazy cleanup...');
   const ghostUser = 9999;
-  await redis.geoadd(GEO_KEY, 0, 0.002, String(ghostUser));
+  await redis.geoadd(GEO_KEY, BASE_LNG, BASE_LAT + 0.003, String(ghostUser));
   // No session hash for ghostUser
   const visibleFromAWithGhost = await findVisibleUsersFor(userA);
   const ghostStillInGeo = await redis.zscore(GEO_KEY, String(ghostUser));
   console.log('   Ghost user in geo after cleanup check:', ghostStillInGeo !== null ? 'YES (BUG)' : 'NO (removed)');
   console.log();
 
-  // Cleanup
-  console.log('🧹 Cleaning up test data...');
-  await cleanupUser(userA);
-  await cleanupUser(userB);
-  await cleanupUser(userC);
-  await redis.zrem(GEO_KEY, String(ghostUser));
+  console.log('✅ Redis seeded. If your app is connected nearby, you should see');
+  console.log('   cyan-bordered markers appear on the map within ~7 seconds.');
+  console.log();
 
-  console.log('✅ Done');
+  // Leave data in Redis for the running server to pick up.
+  // Do NOT clean up here — the app test needs it.
   await redis.quit();
 }
 

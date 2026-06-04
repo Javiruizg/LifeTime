@@ -12,6 +12,7 @@ interface UserMarkerProps {
     message?: string | null;
     imageUrl: string | null;
   };
+  isSelf?: boolean;
 }
 
 const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL || 'http://localhost:3000';
@@ -32,11 +33,12 @@ const getImageUrl = (imageUrl: string | null): string => {
   return `${SERVER_URL}${imageUrl}`;
 };
 
-export default function UserMarker({ coordinate, profile }: UserMarkerProps) {
+export default function UserMarker({ coordinate, profile, isSelf = false }: UserMarkerProps) {
   const [hasError, setHasError] = useState(false);
 
   const imageUri = hasError ? `${SERVER_URL}${DEFAULT_AVATAR}` : getImageUrl(profile.imageUrl);
   const showBubble = !!profile.message && profile.message.trim() !== '';
+  const accentColor = isSelf ? '#22d3ee' : theme.colors.primary;
 
   return (
     <Marker coordinate={coordinate} anchor={{ x: 0.5, y: 1 }}>
@@ -49,7 +51,7 @@ export default function UserMarker({ coordinate, profile }: UserMarkerProps) {
           </View>
           <View style={[styles.speechTailDown, !showBubble && styles.hidden]} />
         </View>
-        <View style={styles.avatarOuter}>
+        <View style={[styles.avatarOuter, { backgroundColor: accentColor }]}>
           <Image
             source={{ uri: imageUri }}
             style={styles.avatarImg}
@@ -57,7 +59,7 @@ export default function UserMarker({ coordinate, profile }: UserMarkerProps) {
             onError={() => setHasError(true)}
           />
         </View>
-        <View style={styles.pinStem} />
+        <View style={[styles.pinStem, { backgroundColor: accentColor }]} />
         <View style={styles.pinDot} />
       </View>
     </Marker>
@@ -81,7 +83,6 @@ const styles = StyleSheet.create({
     width: AVATAR_OUTER,
     height: AVATAR_OUTER,
     borderRadius: AVATAR_OUTER / 2,
-    backgroundColor: theme.colors.primary,
     padding: BORDER_WIDTH,
     alignItems: 'center',
     justifyContent: 'center',
@@ -96,7 +97,6 @@ const styles = StyleSheet.create({
   pinStem: {
     width: 3,
     height: 12,
-    backgroundColor: theme.colors.primary,
     borderRadius: 2,
     marginTop: -1,
   },

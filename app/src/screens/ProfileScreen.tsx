@@ -14,12 +14,15 @@ import {
   Keyboard,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as SecureStore from 'expo-secure-store';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { api } from '../shared/lib/api';
 import { getMyProfile, updateProfile } from '../features/profile/profile.service';
 import type { Profile } from '../features/profile/profile.types';
 import { theme } from '../shared/lib/theme';
+
+const PROFILE_CACHE_KEY = 'profile_cache';
 
 const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL;
 const DEFAULT_AVATAR = '/defaults/default-avatar.png';
@@ -76,6 +79,7 @@ export default function ProfileScreen() {
     try {
       const updated = await updateProfile({ name, message });
       setProfile(updated);
+      await SecureStore.setItemAsync(PROFILE_CACHE_KEY, JSON.stringify(updated));
       setNotification({ type: 'success', message: 'Profile saved!' });
     } catch {
       Alert.alert('Error', 'Could not save profile');
@@ -112,7 +116,9 @@ export default function ProfileScreen() {
       const response = await api.post<{ imageUrl: string }>('/upload/profile', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      setProfile((prev) => (prev ? { ...prev, imageUrl: response.data.imageUrl } : prev));
+      const updated = { ...profile, imageUrl: response.data.imageUrl } as Profile;
+      setProfile(updated);
+      await SecureStore.setItemAsync(PROFILE_CACHE_KEY, JSON.stringify(updated));
     } catch {
       Alert.alert('Error', 'Could not upload image');
     }
@@ -127,9 +133,9 @@ export default function ProfileScreen() {
         onPress: async () => {
           try {
             await api.delete('/upload/profile');
-            setProfile((prev) =>
-              prev ? { ...prev, imageUrl: DEFAULT_AVATAR } : prev
-            );
+            const updated = { ...profile, imageUrl: DEFAULT_AVATAR } as Profile;
+            setProfile(updated);
+            await SecureStore.setItemAsync(PROFILE_CACHE_KEY, JSON.stringify(updated));
           } catch {
             Alert.alert('Error', 'Could not delete photo');
           }

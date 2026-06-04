@@ -70,6 +70,7 @@ const LiveMap = forwardRef<MapView, LiveMapProps>(
               message: currentUser.profile.message,
               imageUrl: currentUser.profile.imageUrl,
             }}
+            isSelf
           />
         )}
 
@@ -81,6 +82,7 @@ const LiveMap = forwardRef<MapView, LiveMapProps>(
               message: user.profile.message,
               imageUrl: user.profile.imageUrl,
             }}
+            isSelf={false}
           />
         ))}
       </MapView>
