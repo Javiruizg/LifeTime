@@ -20,6 +20,9 @@ import { getMyProfile } from '../features/profile/profile.service';
 import type { Profile } from '../features/profile/profile.types';
 import { theme } from '../shared/lib/theme';
 import LiveMap from '../components/LiveMap';
+import ConnectModal from '../components/ConnectModal';
+import { getLocationStatus } from '../features/location/location.api';
+import type { LocationRange, LocationDuration } from '../features/location/location.types';
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 
@@ -63,6 +66,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
   const startWatchingLocation = useCallback(async () => {
     try {
@@ -139,6 +143,22 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     useCallback(() => {
       isScreenActiveRef.current = true;
 
+      const checkActiveSession = async () => {
+        try {
+          const status = await getLocationStatus();
+          if (status.active && isScreenActiveRef.current) {
+            navigation.replace('ConnectedMap', {
+              range: status.range ?? 1000,
+              durationMinutes: 60, // placeholder; screen reads from status anyway
+            });
+            return true;
+          }
+        } catch {
+          // Backend not ready or no active session; stay on HomeScreen
+        }
+        return false;
+      };
+
       const loadCachedData = async () => {
         try {
           const cachedProfile = await SecureStore.getItemAsync(CACHE_KEYS.profile);
@@ -189,6 +209,8 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       };
 
       const initialize = async () => {
+        const hasActiveSession = await checkActiveSession();
+        if (hasActiveSession) return;
         await loadCachedData();
         refreshInBackground();
       };
@@ -256,6 +278,25 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           </View>
         )}
       </TouchableOpacity>
+
+      {!locationError && (
+        <TouchableOpacity
+          style={styles.connectButton}
+          onPress={() => setModalVisible(true)}
+          activeOpacity={0.75}
+        >
+          <Text style={styles.connectButtonText}>Connect</Text>
+        </TouchableOpacity>
+      )}
+
+      <ConnectModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        onConfirm={(range: LocationRange, durationMinutes: LocationDuration) => {
+          setModalVisible(false);
+          navigation.navigate('ConnectedMap', { range, durationMinutes });
+        }}
+      />
     </View>
   );
 }
@@ -336,5 +377,20 @@ const styles = StyleSheet.create({
     color: '#000000ff',
     fontSize: 13,
     fontWeight: '600',
+  },
+  connectButton: {
+    position: 'absolute',
+    bottom: 40,
+    alignSelf: 'center',
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 40,
+    paddingVertical: 14,
+    borderRadius: 28,
+    ...theme.shadows.md,
+  },
+  connectButtonText: {
+    color: '#000000',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

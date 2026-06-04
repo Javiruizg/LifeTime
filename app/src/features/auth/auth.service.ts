@@ -23,6 +23,7 @@ export async function loginOrRegister(deviceId: string): Promise<AuthResponse> {
 
   const { accessToken, refreshToken } = response.data;
 
+  console.log('ACCESS TOKEN:', accessToken);
   await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, accessToken);
   await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
 

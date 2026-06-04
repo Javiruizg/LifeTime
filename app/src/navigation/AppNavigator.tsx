@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AuthLoadingScreen from '../screens/AuthLoadingScreen';
 import HomeScreen from '../screens/HomeScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import ConnectedMapScreen from '../screens/ConnectedMapScreen';
 import { getAccessToken } from '../features/auth/auth.service';
 import { theme } from '../shared/lib/theme';
 
@@ -11,6 +12,7 @@ export type RootStackParamList = {
   AuthLoading: undefined;
   Home: undefined;
   Profile: undefined;
+  ConnectedMap: { range: number; durationMinutes: number };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -49,6 +51,7 @@ export default function AppNavigator() {
         {isAuthenticated ? (
           [
             <Stack.Screen key="Home" name="Home" component={HomeScreen} />,
+            <Stack.Screen key="ConnectedMap" name="ConnectedMap" component={ConnectedMapScreen} />,
             <Stack.Screen
               key="Profile"
               name="Profile"
