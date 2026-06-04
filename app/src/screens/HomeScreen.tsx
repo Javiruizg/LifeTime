@@ -69,7 +69,7 @@ const DARK_MAP_STYLE = [
 
 const AVATAR_SIZE = 44;
 const BORDER_WIDTH = 3;
-const PROFILE_BUTTON_SIZE = 60;
+const FLOAT_BUTTON_SIZE = 56;
 
 const AVATAR_OUTER = AVATAR_SIZE + BORDER_WIDTH * 2;
 const BUBBLE_MAX_W = 220;
@@ -252,15 +252,25 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       )}
 
       <TouchableOpacity
-        style={styles.profileButton}
+        style={styles.floatButtonLeft}
         onPress={() => navigation.navigate('Profile')}
         activeOpacity={0.75}
       >
         {profile ? (
-          <Image source={{ uri: getImageUrl(profile.imageUrl) }} style={styles.profileThumb} />
+          <Image source={{ uri: getImageUrl(profile.imageUrl) }} style={styles.floatButtonImg} />
         ) : (
-          <View style={styles.profileThumbFallback}>
-            <Feather name="user" size={20} color={theme.colors.text} />
+          <View style={styles.floatButtonFallback}>
+            <Feather name="user" size={22} color={theme.colors.text} />
+          </View>
+        )}
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.floatButtonRight} activeOpacity={0.75}>
+        {profile ? (
+          <Image source={{ uri: getImageUrl(profile.imageUrl) }} style={styles.floatButtonImg} />
+        ) : (
+          <View style={styles.floatButtonFallback}>
+            <Feather name="users" size={22} color={theme.colors.text} />
           </View>
         )}
       </TouchableOpacity>
@@ -324,23 +334,35 @@ const styles = StyleSheet.create({
     marginTop: -2,
   },
 
-  profileButton: {
+  floatButtonLeft: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 85 : 60,
-    left: 40,
-    width: PROFILE_BUTTON_SIZE,
-    height: PROFILE_BUTTON_SIZE,
-    borderRadius: PROFILE_BUTTON_SIZE / 2,
+    top: Platform.OS === 'ios' ? 76 : 44,
+    left: 20,
+    width: FLOAT_BUTTON_SIZE,
+    height: FLOAT_BUTTON_SIZE,
+    borderRadius: FLOAT_BUTTON_SIZE / 2,
     overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.25)',
+    borderWidth: 6,
+    borderColor: 'rgba(0, 0, 0, 1)',
     ...theme.shadows.md,
   },
-  profileThumb: {
+  floatButtonRight: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 76 : 44,
+    right: 20,
+    width: FLOAT_BUTTON_SIZE,
+    height: FLOAT_BUTTON_SIZE,
+    borderRadius: FLOAT_BUTTON_SIZE / 2,
+    overflow: 'hidden',
+    borderWidth: 6,
+    borderColor: 'rgba(0, 0, 0, 1)',
+    ...theme.shadows.md,
+  },
+  floatButtonImg: {
     width: '100%',
     height: '100%',
   },
-  profileThumbFallback: {
+  floatButtonFallback: {
     width: '100%',
     height: '100%',
     backgroundColor: theme.colors.surface,
