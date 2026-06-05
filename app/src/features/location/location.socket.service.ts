@@ -30,7 +30,7 @@ export async function startSharing(
     locationWatcher = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.Balanced,
-        distanceInterval: 20,
+        //distanceInterval: 20,
         timeInterval: 7000,
       },
       (position) => {

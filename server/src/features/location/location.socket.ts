@@ -12,6 +12,7 @@ const locationUpdateSchema = z.object({
 });
 
 export function registerLocationSocketHandlers(io: Server): void {
+  //This is executed everytime a client connects to the WebSocket server. We set up event handlers for location updates and disconnections here.
   io.on('connection', async (socket) => {
     const userId = socket.data.userId as number;
     const sessionKey = `${SESSION_KEY_PREFIX}:${userId}`;
