@@ -18,7 +18,7 @@ interface UserMarkerProps {
 const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL || 'http://localhost:3000';
 const DEFAULT_AVATAR = '/defaults/default-avatar.png';
 
-const AVATAR_SIZE = 44;
+const AVATAR_SIZE = 54;
 const BORDER_WIDTH = 3;
 const AVATAR_OUTER = AVATAR_SIZE + BORDER_WIDTH * 2;
 const BUBBLE_MAX_W = 220;
