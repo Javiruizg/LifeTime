@@ -80,7 +80,7 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
   const handleSessionExpired = useCallback(async () => {
     if (!isActiveRef.current) return;
     await Notifications.cancelAllScheduledNotificationsAsync();
-    Alert.alert('Session expired', 'You have been disconnected from the map.', [
+    Alert.alert('Automatic disconnection', 'You have been disconnected from the map.', [
       { text: 'OK', onPress: () => navigation.replace('Home') },
     ]);
   }, [navigation]);

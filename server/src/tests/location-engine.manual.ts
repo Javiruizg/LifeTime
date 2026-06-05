@@ -1,8 +1,9 @@
 import redis from '../shared/lib/redis';
-import { updateUserLocation, findVisibleUsersFor } from '../features/location/location.engine';
+import { findVisibleUsersFor } from '../features/location/location.engine';
 
 const SESSION_KEY_PREFIX = 'location:session';
 const GEO_KEY = 'geo:connected_users';
+const MOCK_IDS = [9001, 9002, 9003];
 
 async function seedUser(userId: number, lat: number, lng: number, range: number): Promise<void> {
   const key = `${SESSION_KEY_PREFIX}:${userId}`;
@@ -15,13 +16,28 @@ async function cleanupUser(userId: number): Promise<void> {
   await redis.zrem(GEO_KEY, String(userId));
 }
 
+async function findRealUserLocation(): Promise<{ lat: number; lng: number } | null> {
+  const keys = await redis.keys(`${SESSION_KEY_PREFIX}:*`);
+  for (const key of keys) {
+    const userId = key.split(':').pop();
+    if (!userId || MOCK_IDS.includes(Number(userId))) continue;
+
+    const session = await redis.hgetall(key);
+    if (session && session.lat && session.lng) {
+      return {
+        lat: parseFloat(session.lat),
+        lng: parseFloat(session.lng),
+      };
+    }
+  }
+  return null;
+}
+
 async function runTest(): Promise<void> {
   console.log('🔧 Connecting to Redis...');
   await redis.connect();
 
-  const userA = 9001;
-  const userB = 9002;
-  const userC = 9003;
+  const [userA, userB, userC] = MOCK_IDS;
 
   // Cleanup any stale data from previous runs
   await cleanupUser(userA);
@@ -29,21 +45,30 @@ async function runTest(): Promise<void> {
   await cleanupUser(userC);
 
   /* ------------------------------------------------------------------ */
-  /*  Seed fake users near Seville (app default location)                */
-  /*  ~0.001° ≈ 111 m.  A at (37.381, -5.991), B at (37.382, -5.990),    */
-  /*  C at (37.379, -5.992).  All within 500 m of the default.            */
+  /*  Detect the real app user's location and seed fakes right next    */
+  /*  to them with a huge range so mutual visibility is guaranteed.     */
   /* ------------------------------------------------------------------ */
-  const BASE_LAT = 37.38;
-  const BASE_LNG = -5.99;
+  const realUser = await findRealUserLocation();
 
-  await seedUser(userA, BASE_LAT + 0.001, BASE_LNG - 0.001, 500);
-  await seedUser(userB, BASE_LAT + 0.002, BASE_LNG + 0.000, 1000);
-  await seedUser(userC, BASE_LAT - 0.001, BASE_LNG - 0.002, 2000);
+  const BASE_LAT = realUser?.lat ?? 37.38;
+  const BASE_LNG = realUser?.lng ?? -5.99;
+  const TEST_RANGE = 5000; // 5 km — guarantees visibility regardless of offset
 
-  console.log('\n📍 Seeded users near app default location:');
-  console.log(`   A at (${BASE_LAT + 0.001}, ${BASE_LNG - 0.001}) with range 500m`);
-  console.log(`   B at (${BASE_LAT + 0.002}, ${BASE_LNG + 0.000}) with range 1000m`);
-  console.log(`   C at (${BASE_LAT - 0.001}, ${BASE_LNG - 0.002}) with range 2000m`);
+  if (realUser) {
+    console.log(`📡 Found real user at (${BASE_LAT}, ${BASE_LNG})`);
+  } else {
+    console.log(`⚠️  No real user session found; falling back to default (${BASE_LAT}, ${BASE_LNG})`);
+  }
+
+  // Seed ~111 m apart so they're distinct on the map
+  await seedUser(userA, BASE_LAT + 0.001, BASE_LNG - 0.001, TEST_RANGE);
+  await seedUser(userB, BASE_LAT + 0.002, BASE_LNG + 0.000, TEST_RANGE);
+  await seedUser(userC, BASE_LAT - 0.001, BASE_LNG - 0.002, TEST_RANGE);
+
+  console.log('\n📍 Seeded mock users:');
+  console.log(`   A at (${BASE_LAT + 0.001}, ${BASE_LNG - 0.001}) range=${TEST_RANGE}m`);
+  console.log(`   B at (${BASE_LAT + 0.002}, ${BASE_LNG + 0.000}) range=${TEST_RANGE}m`);
+  console.log(`   C at (${BASE_LAT - 0.001}, ${BASE_LNG - 0.002}) range=${TEST_RANGE}m`);
   console.log();
 
   console.log('🔍 Checking visibility for each user (self-contained test)...');
@@ -52,20 +77,36 @@ async function runTest(): Promise<void> {
   console.log('🔍 findVisibleUsersFor(A)');
   const visibleFromA = await findVisibleUsersFor(userA);
   console.log('   Result:', visibleFromA.map((u) => `user ${u.userId} at ${u.distance.toFixed(1)}m`));
-  console.log('   Expected: [B] (C is outside A\'s 500m range)');
+  console.log('   Expected: [B, C, real user]');
   console.log();
 
   console.log('🔍 findVisibleUsersFor(B)');
   const visibleFromB = await findVisibleUsersFor(userB);
   console.log('   Result:', visibleFromB.map((u) => `user ${u.userId} at ${u.distance.toFixed(1)}m`));
-  console.log('   Expected: [A, C]');
+  console.log('   Expected: [A, C, real user]');
   console.log();
 
   console.log('🔍 findVisibleUsersFor(C)');
   const visibleFromC = await findVisibleUsersFor(userC);
   console.log('   Result:', visibleFromC.map((u) => `user ${u.userId} at ${u.distance.toFixed(1)}m`));
-  console.log('   Expected: [B] (A is outside A\'s own range, so mutual fails)');
+  console.log('   Expected: [A, B, real user]');
   console.log();
+
+  if (realUser) {
+    // Find the real user ID for the final check
+    const keys = await redis.keys(`${SESSION_KEY_PREFIX}:*`);
+    const realUserId = keys
+      .map((k) => Number(k.split(':').pop()))
+      .find((id) => !MOCK_IDS.includes(id) && id > 0);
+
+    if (realUserId) {
+      console.log(`🔍 findVisibleUsersFor(real user ${realUserId})`);
+      const visibleFromReal = await findVisibleUsersFor(realUserId);
+      console.log('   Result:', visibleFromReal.map((u) => `user ${u.userId} at ${u.distance.toFixed(1)}m`));
+      console.log('   Expected: [A, B, C]');
+      console.log();
+    }
+  }
 
   // Test lazy cleanup
   console.log('🧹 Testing lazy cleanup...');
@@ -78,7 +119,7 @@ async function runTest(): Promise<void> {
   console.log();
 
   console.log('✅ Redis seeded. If your app is connected nearby, you should see');
-  console.log('   cyan-bordered markers appear on the map within ~7 seconds.');
+  console.log('   markers appear on the map within ~7 seconds.');
   console.log();
 
   // Leave data in Redis for the running server to pick up.
