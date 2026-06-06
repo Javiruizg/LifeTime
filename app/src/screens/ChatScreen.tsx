@@ -7,12 +7,14 @@ import {
   TextInput,
   TouchableOpacity,
   FlatList,
-  KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   StatusBar as RNStatusBar,
+  Keyboard,
+  Animated,
+  Easing,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -68,10 +70,68 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
   const [nextCursor, setNextCursor] = useState<number | null>(null);
   const [myUserId, setMyUserId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  //const [headerHeight, setHeaderHeight] = useState(0);
 
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   const isActiveRef = useRef(true);
+  const keyboardTranslate = useRef(new Animated.Value(0)).current;
+  const inputBarHeightRef = useRef(0);
+  const [inputBarHeight, setInputBarHeight] = useState(0);
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    // Guardamos el espacio inferior que ya tiene la barra
+    const safePadding = insets.bottom > 0 ? insets.bottom : 10;
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      const keyboardHeight = e.endCoordinates.height;
+      
+      // LA MAGIA: 
+      // Al mantener el paddingBottom constante en el componente, la barra ya está elevada.
+      // Para que quede a ras del teclado, le restamos ese padding a la animación.
+      const translateDistance = Math.max(0, keyboardHeight ); //+ safePadding);
+      
+      const duration = Platform.OS === 'ios' ? (e.duration ?? 250) : 250;
+      setIsKeyboardOpen(true);
+      
+      Animated.timing(keyboardTranslate, {
+        toValue: translateDistance,
+        duration,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }).start(() => {
+        requestAnimationFrame(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        });
+      });
+    });
+
+    const hideSub = Keyboard.addListener(hideEvent, (e) => {
+      const duration = Platform.OS === 'ios' ? (e.duration ?? 250) : 250;
+      setIsKeyboardOpen(false);
+      Animated.timing(keyboardTranslate, {
+        toValue: 0,
+        duration,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }).start();
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [keyboardTranslate, insets.bottom]);
+
+  useEffect(() => {
+    if (isLoading || messages.length === 0) return;
+    const t = setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: false });
+    }, 50);
+    return () => clearTimeout(t);
+  }, [isLoading, messages.length > 0]);
 
   useEffect(() => {
     getUserId().then((id) => {
@@ -206,15 +266,12 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
   if (error && messages.length === 0) {
     return (
       <LinearGradient colors={[theme.colors.surface, theme.colors.background]} style={styles.container}>
-        <SafeAreaView style={styles.flex}>
-          <RNStatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-          <View style={styles.errorRoot}>
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.errorButton} onPress={() => navigation.goBack()}>
-              <Text style={styles.errorButtonText}>Go Back</Text>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
+        <View style={styles.errorRoot}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.errorButton} onPress={() => navigation.goBack()}>
+            <Text style={styles.errorButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
       </LinearGradient>
     );
   }
@@ -223,93 +280,93 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
     <LinearGradient colors={[theme.colors.surface, theme.colors.background]} style={styles.container}>
       <RNStatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
-      >
-        <View style={styles.screen}>
-          <View
-            style={styles.headerWrapper}
-            //onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
-          >
-            <SafeAreaView edges={['top']}>
-              <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                  <Feather name="arrow-left" size={24} color={theme.colors.text} />
-                </TouchableOpacity>
+      <View style={styles.screen}>
+        <View style={[styles.headerWrapper, { paddingTop: insets.top }]}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+              <Feather name="arrow-left" size={24} color={theme.colors.text} />
+            </TouchableOpacity>
 
-                <Image
-                  source={{ uri: getImageUrl(otherUserImageUrl) }}
-                  style={styles.headerAvatar}
-                />
-
-                <Text style={styles.headerName} numberOfLines={1}>
-                  {otherUserName}
-                </Text>
-              </View>
-            </SafeAreaView>
-          </View>
-
-          <View style={styles.listWrapper}>
-            {isLoading && messages.length === 0 ? (
-              <View style={styles.center}>
-                <ActivityIndicator color={theme.colors.primary} />
-              </View>
-            ) : (
-              <FlatList
-                ref={flatListRef}
-                style={styles.list}
-                data={messages}
-                renderItem={renderMessage}
-                keyExtractor={keyExtractor}
-                contentContainerStyle={styles.listContent}
-                onEndReached={handleLoadMore}
-                onEndReachedThreshold={0.3}
-                keyboardShouldPersistTaps="handled"
-                keyboardDismissMode="interactive"
-                ListFooterComponent={
-                  isLoadingMore ? (
-                    <ActivityIndicator style={styles.loadMore} color={theme.colors.primary} />
-                  ) : null
-                }
-                maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-              />
-            )}
-          </View>
-
-          <View
-            style={[
-              styles.inputBar,
-              {
-                paddingBottom: insets.bottom || 12,
-              },
-            ]}
-          >
-            <TextInput
-              style={styles.input}
-              value={inputText}
-              onChangeText={setInputText}
-              placeholder="Type a message..."
-              placeholderTextColor={theme.colors.textMuted}
-              multiline
-              maxLength={2000}
+            <Image
+              source={{ uri: getImageUrl(otherUserImageUrl) }}
+              style={styles.headerAvatar}
             />
 
-            <TouchableOpacity
-              style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
-              onPress={handleSend}
-              disabled={!inputText.trim()}
-            >
-              <Feather
-                name="send"
-                size={20}
-                color={inputText.trim() ? '#000' : theme.colors.textMuted}
-              />
-            </TouchableOpacity>
+            <Text style={styles.headerName} numberOfLines={1}>
+              {otherUserName}
+            </Text>
           </View>
         </View>
-      </KeyboardAvoidingView>
+
+        <View style={styles.listWrapper}>
+          {isLoading && messages.length === 0 ? (
+            <View style={styles.center}>
+              <ActivityIndicator color={theme.colors.primary} />
+            </View>
+          ) : (
+            <FlatList
+              ref={flatListRef}
+              style={styles.list}
+              data={messages}
+              renderItem={renderMessage}
+              keyExtractor={keyExtractor}
+              contentContainerStyle={[
+                styles.listContent,
+                { paddingBottom: inputBarHeight + 8 },
+              ]}
+              onEndReached={handleLoadMore}
+              onEndReachedThreshold={0.3}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              ListFooterComponent={
+                isLoadingMore ? (
+                  <ActivityIndicator style={styles.loadMore} color={theme.colors.primary} />
+                ) : null
+              }
+              maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+            />
+          )}
+        </View>
+
+        <Animated.View
+          style={[
+            styles.inputBar,
+            {
+              paddingBottom: insets.bottom > 0 ? insets.bottom + 10: 10,
+              transform: [{ translateY: Animated.multiply(keyboardTranslate, -1) }],
+            },
+          ]}
+          onLayout={(e) => {
+            const h = e.nativeEvent.layout.height;
+            if (Math.abs(h - inputBarHeightRef.current) > 1) {
+              inputBarHeightRef.current = h;
+              setInputBarHeight(h);
+            }
+          }}
+        >
+          <TextInput
+            style={styles.input}
+            value={inputText}
+            onChangeText={setInputText}
+            placeholder="Type a message..."
+            placeholderTextColor={theme.colors.textMuted}
+            multiline
+            maxLength={2000}
+          />
+
+          <TouchableOpacity
+            style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
+            onPress={handleSend}
+            disabled={!inputText.trim()}
+          >
+            <Feather
+              name="send"
+              size={20}
+              color={inputText.trim() ? '#000' : theme.colors.textMuted}
+            />
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
     </LinearGradient>
   );
 }
@@ -318,12 +375,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  flex: {
-    flex: 1,
-  },
   screen: {
     flex: 1,
-    minHeight: 0,
   },
   headerWrapper: {
     backgroundColor: '#1e293b',
@@ -364,7 +417,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingTop: 8,
     flexGrow: 1,
   },
   messageRow: {
@@ -407,6 +460,10 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   inputBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: 12,
