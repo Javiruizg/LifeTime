@@ -24,7 +24,7 @@ import { getMyProfile } from '../features/profile/profile.service';
 import type { Profile } from '../features/profile/profile.types';
 import type { VisibleUserPayload } from '../features/location/location.types';
 import { getOrCreatePrivateChat } from '../features/chat/chat.service';
-import { onChatMessage } from '../features/chat/chat.socket.service';
+import { onChatNotification, shouldNotifyChat, clearChatNotification } from '../features/chat/chat.socket.service';
 import type { ChatMessage } from '../features/chat/chat.types';
 import { theme } from '../shared/lib/theme';
 import LiveMap from '../components/LiveMap';
@@ -107,6 +107,7 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
   const handleUserPress = useCallback(async (userId: number) => {
     try {
       const chat = await getOrCreatePrivateChat(userId);
+      clearChatNotification(chat.chatId);
       const otherUser = otherUsers.find((u) => u.userId === userId);
       navigation.navigate('Chat', {
         chatId: chat.chatId,
@@ -238,6 +239,14 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
         getSocket()?.on('location:users', (users: VisibleUserPayload[]) => {
           if (!isActiveRef.current) return;
           setOtherUsers(users);
+          // Clear notification block for users whose messages are now seen
+          users.forEach((u) => {
+            if (!u.hasUnread) {
+              // We don't know the chatId here, but the server will clear it
+              // when the user opens the chat. For now, we rely on the
+              // location:users interval to update the red border.
+            }
+          });
           if (!hasUsersRef.current) {
             hasUsersRef.current = true;
             maybeHideSpinner();
@@ -250,8 +259,9 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
           handleSessionExpired();
         });
 
-        // 8. Listen for incoming chat messages and show local notifications
-        unsubscribeChatMessage = onChatMessage((message: ChatMessage) => {
+        // 8. Listen for incoming chat notifications and show local notifications
+        unsubscribeChatMessage = onChatNotification((message: ChatMessage) => {
+          console.log('[ConnectedMapScreen] chat:notification received:', message);
           if (!isActiveRef.current) return;
           // Update local state immediately to show red border on the map
           setOtherUsers((prev) =>
@@ -259,12 +269,13 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
               u.userId === message.senderId ? { ...u, hasUnread: true } : u
             )
           );
-          // Only notify if message is from someone else
+          // Only notify once per chat until the user opens it
+          if (!shouldNotifyChat(message.chatId)) return;
           const sender = otherUsersRef.current.find((u) => u.userId === message.senderId);
           if (sender) {
             Notifications.scheduleNotificationAsync({
               content: {
-                title: `New message from ${sender.profile?.name ?? 'Unknown'}`,
+                title: `You have new messages from ${sender.profile?.name ?? 'Unknown'}`,
                 body: message.content,
                 data: {
                   chatId: message.chatId,

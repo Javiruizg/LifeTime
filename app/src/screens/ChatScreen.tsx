@@ -118,7 +118,22 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
 
     const unsubscribeMessage = onChatMessage((message) => {
       if (!isActiveRef.current) return;
-      setMessages((prev) => [...prev, message]);
+      setMessages((prev) => {
+        // Deduplicate: if the real message ID is already in the list, ignore the duplicate
+        if (prev.some((m) => m.id === message.id)) {
+          return prev;
+        }
+        // Replace optimistic message if it exists (same sender + content + negative id)
+        const existingIndex = prev.findIndex(
+          (m) => m.id < 0 && m.senderId === message.senderId && m.content === message.content
+        );
+        if (existingIndex !== -1) {
+          const updated = [...prev];
+          updated[existingIndex] = message;
+          return updated;
+        }
+        return [...prev, message];
+      });
       // Auto-mark as seen when receiving while in chat
       if (message.senderId !== myUserId && message.senderId !== -1) {
         markSeenSocket(chatId);

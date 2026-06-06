@@ -8,6 +8,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import ConnectedMapScreen from '../screens/ConnectedMapScreen';
 import ChatScreen from '../screens/ChatScreen';
 import { getAccessToken } from '../features/auth/auth.service';
+import { clearChatNotification } from '../features/chat/chat.socket.service';
 import { theme } from '../shared/lib/theme';
 
 export type RootStackParamList = {
@@ -60,6 +61,7 @@ export default function AppNavigator() {
         }
 
         if (data?.chatId && data?.otherUserId && data?.otherUserName) {
+          clearChatNotification(Number(data.chatId));
           if (navigationRef.isReady()) {
             navigationRef.navigate('Chat', {
               chatId: Number(data.chatId),
@@ -85,6 +87,7 @@ export default function AppNavigator() {
         }
 
         if (data?.chatId && data?.otherUserId && data?.otherUserName) {
+          clearChatNotification(Number(data.chatId));
           if (navigationRef.isReady()) {
             navigationRef.navigate('Chat', {
               chatId: Number(data.chatId),

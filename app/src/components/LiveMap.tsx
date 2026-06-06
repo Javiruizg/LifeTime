@@ -78,7 +78,7 @@ const LiveMap = forwardRef<MapView, LiveMapProps>(
 
         {otherUsers?.map((user) => (
           <UserMarker
-            key={user.userId}
+            key={`${user.userId}-${user.hasUnread ? '1' : '0'}`}
             coordinate={user.coordinate}
             profile={{
               message: user.profile.message,
