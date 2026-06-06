@@ -105,20 +105,28 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
   }, [navigation]);
 
   const handleUserPress = useCallback(async (userId: number) => {
-    try {
-      const chat = await getOrCreatePrivateChat(userId);
-      clearChatNotification(chat.chatId);
-      const otherUser = otherUsers.find((u) => u.userId === userId);
-      navigation.navigate('Chat', {
-        chatId: chat.chatId,
-        otherUserId: userId,
-        otherUserName: otherUser?.profile?.name ?? chat.otherUser.name ?? 'Unknown',
-        otherUserImageUrl: otherUser?.profile?.imageUrl ?? chat.otherUser.imageUrl ?? null,
-      });
-    } catch (err) {
-      Alert.alert('Error', 'Could not open chat. Please try again.');
-    }
-  }, [navigation, otherUsers]);
+  try {
+    const chat = await getOrCreatePrivateChat(userId);
+    
+    clearChatNotification(chat.chatId);
+    
+    setOtherUsers((prevUsers) =>
+      prevUsers.map((u) =>
+        u.userId === userId ? { ...u, hasUnread: false } : u
+      )
+    );
+
+    const otherUser = otherUsers.find((u) => u.userId === userId);
+    navigation.navigate('Chat', {
+      chatId: chat.chatId,
+      otherUserId: userId,
+      otherUserName: otherUser?.profile?.name ?? chat.otherUser.name ?? 'Unknown',
+      otherUserImageUrl: otherUser?.profile?.imageUrl ?? chat.otherUser.imageUrl ?? null,
+    });
+  } catch (err) {
+    Alert.alert('Error', 'Could not open chat. Please try again.');
+  }
+}, [navigation, otherUsers]);
 
   // Refresh profile whenever screen regains focus (e.g. after editing in ProfileScreen)
   useFocusEffect(
@@ -186,13 +194,13 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
           setProfile(profileData);
           await SecureStore.setItemAsync(CACHE_KEYS.profile, JSON.stringify(profileData));
           hasProfileRef.current = true;
-          maybeHideSpinner();
+          //maybeHideSpinner();
         } catch { /* ignore network errors, keep cached profile */ }
 
         // If profile still not loaded, mark as attempted so spinner doesn't block forever
         if (!hasProfileRef.current) {
           hasProfileRef.current = true;
-          maybeHideSpinner();
+          //maybeHideSpinner();
         }
 
         // 3. Verify active session
@@ -236,17 +244,21 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
         }
 
         // 6. Listen for visible users
-        getSocket()?.on('location:users', (users: VisibleUserPayload[]) => {
+        getSocket()?.on('location:users', (serverUsers: VisibleUserPayload[]) => {
           if (!isActiveRef.current) return;
-          setOtherUsers(users);
-          // Clear notification block for users whose messages are now seen
-          users.forEach((u) => {
-            if (!u.hasUnread) {
-              // We don't know the chatId here, but the server will clear it
-              // when the user opens the chat. For now, we rely on the
-              // location:users interval to update the red border.
-            }
+          
+          setOtherUsers((prevLocalUsers) => {
+            return serverUsers.map((serverUser) => {
+              // Buscamos si localmente ya sabíamos que este usuario nos había mandado un mensaje
+              const localUser = prevLocalUsers.find((u) => u.userId === serverUser.userId);
+              return {
+                ...serverUser,
+                // Si el servidor dice que es unread, o si localmente ya lo teníamos como unread, se queda en true
+                hasUnread: serverUser.hasUnread || (localUser?.hasUnread ?? false),
+              };
+            });
           });
+
           if (!hasUsersRef.current) {
             hasUsersRef.current = true;
             maybeHideSpinner();
@@ -263,32 +275,36 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
         unsubscribeChatMessage = onChatNotification((message: ChatMessage) => {
           console.log('[ConnectedMapScreen] chat:notification received:', message);
           if (!isActiveRef.current) return;
-          // Update local state immediately to show red border on the map
-          setOtherUsers((prev) =>
-            prev.map((u) =>
-              u.userId === message.senderId ? { ...u, hasUnread: true } : u
-            )
-          );
-          // Only notify once per chat until the user opens it
-          if (!shouldNotifyChat(message.chatId)) return;
-          const sender = otherUsersRef.current.find((u) => u.userId === message.senderId);
-          if (sender) {
-            Notifications.scheduleNotificationAsync({
-              content: {
-                title: `You have new messages from ${sender.profile?.name ?? 'Unknown'}`,
-                body: message.content,
-                data: {
-                  chatId: message.chatId,
-                  otherUserId: message.senderId,
-                  otherUserName: sender.profile?.name ?? 'Unknown',
-                  otherUserImageUrl: sender.profile?.imageUrl ?? null,
-                },
-              },
-              trigger: null,
-            }).catch(() => {});
-          }
-        });
 
+          // 1. Actualizamos el estado de manera segura asegurándonos de mantener el hasUnread en True
+          setOtherUsers((prev) => {
+            const updatedUsers = prev.map((u) =>
+              u.userId === message.senderId ? { ...u, hasUnread: true } : u
+            );
+
+            // 2. En lugar de usar la ref de fuera, buscamos el remitente directamente del estado previo actualizado
+            const sender = updatedUsers.find((u) => u.userId === message.senderId);
+            
+            // Only notify once per chat until the user opens it
+            if (shouldNotifyChat(message.chatId) && sender) {
+              Notifications.scheduleNotificationAsync({
+                content: {
+                  title: `You have new messages from ${sender.profile?.name ?? 'Unknown'}`,
+                  body: message.content,
+                  data: {
+                    chatId: message.chatId,
+                    otherUserId: message.senderId,
+                    otherUserName: sender.profile?.name ?? 'Unknown',
+                    otherUserImageUrl: sender.profile?.imageUrl ?? null,
+                  },
+                },
+                trigger: null,
+              }).catch(() => {});
+            }
+
+            return updatedUsers;
+          });
+        });
       } catch (err) {
         if (isActiveRef.current) {
           setError('Failed to initialize connected map. Please try again.');
