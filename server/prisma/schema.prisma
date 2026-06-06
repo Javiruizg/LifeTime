@@ -22,7 +22,6 @@ model User {
 
   // Relaciones
   profile      Profile?
-  connectedStats ConnectedStats?
 
   sentRequests     FriendRequest[] @relation("SentRequests")
   receivedRequests FriendRequest[] @relation("ReceivedRequests")
@@ -55,28 +54,6 @@ model Profile {
   groupChat GroupChat?
 
   @@map("profiles")
-}
-
-// ─────────────────────────────────────────────
-//  ESTADO DE CONEXIÓN (almacenado en Redis,
-//  este modelo se usa solo para migraciones
-//  o como referencia — los datos reales
-//  viven en Redis como JSON)
-// ─────────────────────────────────────────────
-
-model ConnectedStats {
-  id          Int      @id @default(autoincrement())
-  userId      Int      @unique @map("user_id")
-  range       Float    // metros de visibilidad
-  automDisc   Int      @map("autom_disc") // segundos hasta desconexión automática
-  latitude    Float
-  longitude   Float
-  connectedAt DateTime @default(now()) @map("connected_at")
-  expiresAt   DateTime @map("expires_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("connected_stats")
 }
 
 // ─────────────────────────────────────────────

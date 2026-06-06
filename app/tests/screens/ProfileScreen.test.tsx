@@ -78,7 +78,7 @@ describe('ProfileScreen', () => {
 
   afterEach(() => {
     for (const r of mountedRenderers) {
-      r.unmount();
+      act(() => { r.unmount(); });
     }
   });
 

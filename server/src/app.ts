@@ -4,6 +4,8 @@ import path from 'path';
 import authRouter from './features/auth/auth.routes';
 import uploadRouter from './features/upload/upload.routes';
 import profileRouter from './features/profile/profile.routes';
+import locationRouter from './features/location/location.routes';
+import chatRouter from './features/chat/chat.routes';
 
 const app = express();
 
@@ -28,6 +30,8 @@ app.get('/health', (_req: Request, res: Response) => {
 app.use('/api/auth', authRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/profile', profileRouter);
+app.use('/api/location', locationRouter);
+app.use('/api/chat', chatRouter);
 
 // Error handler global
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

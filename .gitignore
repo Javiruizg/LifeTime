@@ -63,3 +63,9 @@ yarn-error.*
 .cache/
 
 opencode.json
+
+app/android/
+app/ios/
+
+PLAN_LOCATION.md
+HOME_PERFORMANCE_IMPROVEMENT
