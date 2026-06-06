@@ -50,7 +50,7 @@ describe('AppNavigator', () => {
 
     const texts = wrapper.root.findAllByType('Text');
     const contents = texts.map((t: any) => t.props.children);
-    expect(contents).toContain('Este es el home');
+    expect(contents).toContain('Enable location');
   });
 
   it('renders AuthLoadingScreen when not authenticated', async () => {
