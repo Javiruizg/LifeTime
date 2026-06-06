@@ -14,8 +14,10 @@ interface LiveMapProps {
     userId: number;
     profile: Profile;
     coordinate: { latitude: number; longitude: number };
+    hasUnread?: boolean;
   }>;
   onRegionChange?: (region: Region) => void;
+  onUserPress?: (userId: number) => void;
 }
 
 const DARK_MAP_STYLE = [
@@ -42,7 +44,7 @@ const DARK_MAP_STYLE = [
 ];
 
 const LiveMap = forwardRef<MapView, LiveMapProps>(
-  ({ initialRegion, currentUser, otherUsers, onRegionChange }, ref) => {
+  ({ initialRegion, currentUser, otherUsers, onRegionChange, onUserPress }, ref) => {
     const mapRef = useRef<MapView>(null);
 
     useImperativeHandle(ref, () => mapRef.current!);
@@ -83,6 +85,8 @@ const LiveMap = forwardRef<MapView, LiveMapProps>(
               imageUrl: user.profile.imageUrl,
             }}
             isSelf={false}
+            hasUnread={user.hasUnread}
+            onPress={() => onUserPress?.(user.userId)}
           />
         ))}
       </MapView>

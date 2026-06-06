@@ -6,6 +6,7 @@ import AuthLoadingScreen from '../screens/AuthLoadingScreen';
 import HomeScreen from '../screens/HomeScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import ConnectedMapScreen from '../screens/ConnectedMapScreen';
+import ChatScreen from '../screens/ChatScreen';
 import { getAccessToken } from '../features/auth/auth.service';
 import { theme } from '../shared/lib/theme';
 
@@ -14,6 +15,12 @@ export type RootStackParamList = {
   Home: undefined;
   Profile: undefined;
   ConnectedMap: { range?: number; durationMinutes?: number };
+  Chat: {
+    chatId: number;
+    otherUserId: number;
+    otherUserName: string;
+    otherUserImageUrl?: string | null;
+  };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -44,9 +51,22 @@ export default function AppNavigator() {
       // Notification response listener: handle taps on scheduled notifications
       responseListenerRef.current = Notifications.addNotificationResponseReceivedListener((response) => {
         const title = response.notification.request.content.title;
+        const data = response.notification.request.content.data as Record<string, unknown> | undefined;
+
         if (title === 'Disconnected from map') {
           if (navigationRef.isReady()) {
             navigationRef.navigate('Home');
+          }
+        }
+
+        if (data?.chatId && data?.otherUserId && data?.otherUserName) {
+          if (navigationRef.isReady()) {
+            navigationRef.navigate('Chat', {
+              chatId: Number(data.chatId),
+              otherUserId: Number(data.otherUserId),
+              otherUserName: String(data.otherUserName),
+              otherUserImageUrl: data.otherUserImageUrl ? String(data.otherUserImageUrl) : null,
+            });
           }
         }
       });
@@ -56,9 +76,22 @@ export default function AppNavigator() {
     Notifications.getLastNotificationResponseAsync()
       .then((response) => {
         const title = response?.notification.request.content.title;
+        const data = response?.notification.request.content.data as Record<string, unknown> | undefined;
+
         if (title === 'Disconnected from map') {
           if (navigationRef.isReady()) {
             navigationRef.navigate('Home');
+          }
+        }
+
+        if (data?.chatId && data?.otherUserId && data?.otherUserName) {
+          if (navigationRef.isReady()) {
+            navigationRef.navigate('Chat', {
+              chatId: Number(data.chatId),
+              otherUserId: Number(data.otherUserId),
+              otherUserName: String(data.otherUserName),
+              otherUserImageUrl: data.otherUserImageUrl ? String(data.otherUserImageUrl) : null,
+            });
           }
         }
       })
@@ -106,6 +139,7 @@ export default function AppNavigator() {
           [
             <Stack.Screen key="Home" name="Home" component={HomeScreen} />,
             <Stack.Screen key="ConnectedMap" name="ConnectedMap" component={ConnectedMapScreen} />,
+            <Stack.Screen key="Chat" name="Chat" component={ChatScreen} />,
             <Stack.Screen
               key="Profile"
               name="Profile"

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import redis from '../../shared/lib/redis';
 import { updateUserLocation, findVisibleUsersFor } from './location.engine';
 import { prisma } from '../../shared/lib/prisma';
+import { hasUnreadFromUser } from '../chat/chat.service';
 
 const SESSION_KEY_PREFIX = 'location:session';
 
@@ -45,12 +46,17 @@ export function registerLocationSocketHandlers(io: Server): void {
               const profile = await prisma.profile.findUnique({
                 where: { userId: parseInt(user.userId, 10) },
               });
+              const hasUnread = await hasUnreadFromUser(
+                userId,
+                parseInt(user.userId, 10)
+              );
               return {
                 userId: parseInt(user.userId, 10),
                 latitude: user.latitude,
                 longitude: user.longitude,
                 distance: user.distance,
                 profile: profile || null,
+                hasUnread,
               };
             })
           );
@@ -62,6 +68,7 @@ export function registerLocationSocketHandlers(io: Server): void {
             longitude: user.longitude,
             distance: user.distance,
             profile: null,
+            hasUnread: false,
           }));
         }
 

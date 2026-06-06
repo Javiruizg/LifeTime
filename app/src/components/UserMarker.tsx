@@ -13,6 +13,8 @@ interface UserMarkerProps {
     imageUrl: string | null;
   };
   isSelf?: boolean;
+  hasUnread?: boolean;
+  onPress?: () => void;
 }
 
 const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL || 'http://localhost:3000';
@@ -33,15 +35,16 @@ const getImageUrl = (imageUrl: string | null): string => {
   return `${SERVER_URL}${imageUrl}`;
 };
 
-export default function UserMarker({ coordinate, profile, isSelf = false }: UserMarkerProps) {
+export default function UserMarker({ coordinate, profile, isSelf = false, hasUnread = false, onPress }: UserMarkerProps) {
   const [hasError, setHasError] = useState(false);
 
   const imageUri = hasError ? `${SERVER_URL}${DEFAULT_AVATAR}` : getImageUrl(profile.imageUrl);
   const showBubble = !!profile.message && profile.message.trim() !== '';
   const accentColor = isSelf ? '#22d3ee' : '#384954ff';
+  const borderColor = hasUnread ? '#EF4444' : accentColor;
 
   return (
-    <Marker coordinate={coordinate} anchor={{ x: 0.5, y: 1 }}>
+    <Marker coordinate={coordinate} anchor={{ x: 0.5, y: 1 }} onPress={onPress}>
       <View style={styles.markerContent}>
         <View style={styles.bubbleArea}>
           <View style={[styles.speechBubble, !showBubble && styles.hidden]}>
@@ -51,7 +54,7 @@ export default function UserMarker({ coordinate, profile, isSelf = false }: User
           </View>
           <View style={[styles.speechTailDown, !showBubble && styles.hidden]} />
         </View>
-        <View style={[styles.avatarOuter, { backgroundColor: accentColor }]}>
+        <View style={[styles.avatarOuter, { backgroundColor: borderColor }]}>
           <Image
             source={{ uri: imageUri }}
             style={styles.avatarImg}

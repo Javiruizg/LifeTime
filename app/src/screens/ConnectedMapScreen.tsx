@@ -23,6 +23,9 @@ import { getSocket } from '../shared/lib/socket';
 import { getMyProfile } from '../features/profile/profile.service';
 import type { Profile } from '../features/profile/profile.types';
 import type { VisibleUserPayload } from '../features/location/location.types';
+import { getOrCreatePrivateChat } from '../features/chat/chat.service';
+import { onChatMessage } from '../features/chat/chat.socket.service';
+import type { ChatMessage } from '../features/chat/chat.types';
 import { theme } from '../shared/lib/theme';
 import LiveMap from '../components/LiveMap';
 
@@ -67,8 +70,13 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
   const [profile, setProfile] = useState<Profile | null>(null);
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [otherUsers, setOtherUsers] = useState<VisibleUserPayload[]>([]);
+  const otherUsersRef = useRef(otherUsers);
   const [isInitializing, setIsInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    otherUsersRef.current = otherUsers;
+  }, [otherUsers]);
 
   const maybeHideSpinner = useCallback(() => {
     if (!isActiveRef.current) return;
@@ -96,6 +104,21 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
     navigation.replace('Home');
   }, [navigation]);
 
+  const handleUserPress = useCallback(async (userId: number) => {
+    try {
+      const chat = await getOrCreatePrivateChat(userId);
+      const otherUser = otherUsers.find((u) => u.userId === userId);
+      navigation.navigate('Chat', {
+        chatId: chat.chatId,
+        otherUserId: userId,
+        otherUserName: otherUser?.profile?.name ?? chat.otherUser.name ?? 'Unknown',
+        otherUserImageUrl: otherUser?.profile?.imageUrl ?? chat.otherUser.imageUrl ?? null,
+      });
+    } catch (err) {
+      Alert.alert('Error', 'Could not open chat. Please try again.');
+    }
+  }, [navigation, otherUsers]);
+
   // Refresh profile whenever screen regains focus (e.g. after editing in ProfileScreen)
   useFocusEffect(
     useCallback(() => {
@@ -122,6 +145,7 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
 
   useEffect(() => {
     isActiveRef.current = true;
+    let unsubscribeChatMessage: (() => void) | undefined;
 
     const initialize = async () => {
       setIsInitializing(true);
@@ -225,6 +249,35 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
           if (!isActiveRef.current) return;
           handleSessionExpired();
         });
+
+        // 8. Listen for incoming chat messages and show local notifications
+        unsubscribeChatMessage = onChatMessage((message: ChatMessage) => {
+          if (!isActiveRef.current) return;
+          // Update local state immediately to show red border on the map
+          setOtherUsers((prev) =>
+            prev.map((u) =>
+              u.userId === message.senderId ? { ...u, hasUnread: true } : u
+            )
+          );
+          // Only notify if message is from someone else
+          const sender = otherUsersRef.current.find((u) => u.userId === message.senderId);
+          if (sender) {
+            Notifications.scheduleNotificationAsync({
+              content: {
+                title: `New message from ${sender.profile?.name ?? 'Unknown'}`,
+                body: message.content,
+                data: {
+                  chatId: message.chatId,
+                  otherUserId: message.senderId,
+                  otherUserName: sender.profile?.name ?? 'Unknown',
+                  otherUserImageUrl: sender.profile?.imageUrl ?? null,
+                },
+              },
+              trigger: null,
+            }).catch(() => {});
+          }
+        });
+
       } catch (err) {
         if (isActiveRef.current) {
           setError('Failed to initialize connected map. Please try again.');
@@ -239,6 +292,7 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
       isActiveRef.current = false;
       getSocket()?.off('location:users');
       getSocket()?.off('location:session_expired');
+      unsubscribeChatMessage?.();
       stopSharing();
     };
   }, [navigation, handleSessionExpired, maybeHideSpinner]);
@@ -271,6 +325,7 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
       latitude: user.latitude,
       longitude: user.longitude,
     },
+    hasUnread: user.hasUnread ?? false,
   }));
 
   const initialRegion = location
@@ -286,6 +341,7 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
         initialRegion={initialRegion}
         currentUser={currentUser}
         otherUsers={mappedOtherUsers}
+        onUserPress={handleUserPress}
       />
 
       {isInitializing && (

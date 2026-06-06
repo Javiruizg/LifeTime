@@ -40,6 +40,7 @@ export interface VisibleUserPayload {
   longitude: number;
   distance: number;
   profile: VisibleUserProfile | null;
+  hasUnread: boolean;
 }
 
 export interface SessionExpiredPayload {
