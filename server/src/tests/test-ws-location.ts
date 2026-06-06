@@ -34,7 +34,6 @@ async function runTest(): Promise<void> {
     throw new Error(`Auth failed: ${JSON.stringify(authData)}`);
   }
   const { accessToken, userId } = authData;
-  console.log(`   ✅ Got access token for user ${userId}`);
 
   // Step 2: Connect to location sharing
   console.log('\n📍 Step 2: Connect to location sharing...');
@@ -50,7 +49,6 @@ async function runTest(): Promise<void> {
   if (connectData.error) {
     throw new Error(`Connect failed: ${JSON.stringify(connectData)}`);
   }
-  console.log('   ✅ Connected:', connectData);
 
   // Shorten TTL to 5s for testing
   const sessionKey = `location:session:${userId}`;
