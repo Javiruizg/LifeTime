@@ -3,6 +3,7 @@ import { api } from '../../shared/lib/api';
 
 const ACCESS_TOKEN_KEY = 'accessToken';
 const REFRESH_TOKEN_KEY = 'refreshToken';
+const USER_ID_KEY = 'userId';
 const DEVICE_ID_KEY = 'user_device_id';
 
 export interface AuthResponse {
@@ -21,10 +22,11 @@ export async function loginOrRegister(deviceId: string): Promise<AuthResponse> {
     deviceId,
   });
 
-  const { accessToken, refreshToken } = response.data;
+  const { accessToken, refreshToken, userId } = response.data;
 
   await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, accessToken);
   await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
+  await SecureStore.setItemAsync(USER_ID_KEY, String(userId));
 
   return response.data;
 }
@@ -58,9 +60,17 @@ export async function getRefreshToken(): Promise<string | null> {
   return SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
 }
 
+export async function getUserId(): Promise<number | null> {
+  const raw = await SecureStore.getItemAsync(USER_ID_KEY);
+  if (!raw) return null;
+  const parsed = Number(raw);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
 export async function logout(): Promise<void> {
   await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
   await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+  await SecureStore.deleteItemAsync(USER_ID_KEY);
 }
 
 export async function reloginWithDeviceId(): Promise<string> {

@@ -10,14 +10,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  SafeAreaView,
-  StatusBar,
+  StatusBar as RNStatusBar,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
-import { getMessages, sendMessageRest } from '../features/chat/chat.service';
+import { getMessages } from '../features/chat/chat.service';
 import {
   joinChat,
   leaveChat,
@@ -27,7 +27,7 @@ import {
   markSeenSocket,
 } from '../features/chat/chat.socket.service';
 import type { ChatMessage } from '../features/chat/chat.types';
-import { getSocket } from '../shared/lib/socket';
+import { getUserId } from '../features/auth/auth.service';
 import { theme } from '../shared/lib/theme';
 
 type ChatScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Chat'>;
@@ -58,6 +58,8 @@ const getImageUrl = (imageUrl: string | null | undefined): string => {
 export default function ChatScreen({ navigation, route }: ChatScreenProps) {
   const { chatId, otherUserId, otherUserName, otherUserImageUrl } = route.params;
 
+  const insets = useSafeAreaInsets();
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -66,75 +68,71 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
   const [nextCursor, setNextCursor] = useState<number | null>(null);
   const [myUserId, setMyUserId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  //const [headerHeight, setHeaderHeight] = useState(0);
+
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   const isActiveRef = useRef(true);
 
-  // Determine my userId from socket auth or store
   useEffect(() => {
-    const socket = getSocket();
-    if (socket?.auth && typeof socket.auth === 'object') {
-      // We can't get userId directly from socket.auth easily, but we can try to decode JWT
-      // For now, we infer it from messages: first message where senderId matches me
-      // Actually, we don't strictly need myUserId stored if we can infer from the server
-      // Let's use a simpler approach: messages from otherUserId are "other", everything else is "me"
-      setMyUserId(-1); // sentinel, we will infer from messages
-    }
+    getUserId().then((id) => {
+      if (id !== null) {
+        setMyUserId(id);
+      }
+    });
   }, []);
 
-  // Load initial messages
-  const loadMessages = useCallback(async (cursor?: number) => {
-    try {
-      const result = await getMessages(chatId, 50, cursor);
-      if (!isActiveRef.current) return;
+  const loadMessages = useCallback(
+    async (cursor?: number) => {
+      try {
+        const result = await getMessages(chatId, 50, cursor);
+        if (!isActiveRef.current) return;
 
-      if (cursor) {
-        // Prepend older messages
-        setMessages((prev) => [...result.messages.reverse(), ...prev]);
-      } else {
-        setMessages(result.messages.reverse());
+        if (cursor !== undefined) {
+          setMessages((prev) => [...result.messages.reverse(), ...prev]);
+        } else {
+          setMessages(result.messages.reverse());
+        }
+        setHasMore(result.hasMore);
+        setNextCursor(result.nextCursor);
+      } catch {
+        if (!isActiveRef.current) return;
+        setError('Failed to load messages');
+      } finally {
+        if (!isActiveRef.current) return;
+        setIsLoading(false);
+        setIsLoadingMore(false);
       }
-      setHasMore(result.hasMore);
-      setNextCursor(result.nextCursor);
-    } catch (err) {
-      if (!isActiveRef.current) return;
-      setError('Failed to load messages');
-    } finally {
-      if (!isActiveRef.current) return;
-      setIsLoading(false);
-      setIsLoadingMore(false);
-    }
-  }, [chatId]);
+    },
+    [chatId]
+  );
 
   useEffect(() => {
     isActiveRef.current = true;
     setIsLoading(true);
     loadMessages();
 
-    // Join chat room
     joinChat(chatId);
-
-    // Mark messages as seen when opening
     markSeenSocket(chatId);
 
     const unsubscribeMessage = onChatMessage((message) => {
       if (!isActiveRef.current) return;
+
       setMessages((prev) => {
-        // Deduplicate: if the real message ID is already in the list, ignore the duplicate
-        if (prev.some((m) => m.id === message.id)) {
-          return prev;
-        }
-        // Replace optimistic message if it exists (same sender + content + negative id)
-        const existingIndex = prev.findIndex(
+        if (prev.some((m) => m.id === message.id)) return prev;
+
+        const optimisticIndex = prev.findIndex(
           (m) => m.id < 0 && m.senderId === message.senderId && m.content === message.content
         );
-        if (existingIndex !== -1) {
+
+        if (optimisticIndex !== -1) {
           const updated = [...prev];
-          updated[existingIndex] = message;
+          updated[optimisticIndex] = message;
           return updated;
         }
+
         return [...prev, message];
       });
-      // Auto-mark as seen when receiving while in chat
+
       if (message.senderId !== myUserId && message.senderId !== -1) {
         markSeenSocket(chatId);
       }
@@ -143,7 +141,7 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
     const unsubscribeSeen = onChatSeen((payload) => {
       if (!isActiveRef.current) return;
       if (payload.chatId !== chatId) return;
-      // Mark all messages sent by me as seen
+
       setMessages((prev) =>
         prev.map((msg) =>
           msg.senderId !== payload.byUserId ? { ...msg, seen: true } : msg
@@ -159,24 +157,10 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
     };
   }, [chatId, loadMessages, myUserId]);
 
-  // Infer myUserId from first batch of messages
-  useEffect(() => {
-    if (messages.length > 0 && myUserId === -1) {
-      const msgFromOther = messages.find((m) => m.senderId === otherUserId);
-      if (msgFromOther) {
-        const inferredMe = messages.find((m) => m.senderId !== otherUserId);
-        if (inferredMe) {
-          setMyUserId(inferredMe.senderId);
-        }
-      }
-    }
-  }, [messages, myUserId, otherUserId]);
-
   const handleSend = useCallback(() => {
     const text = inputText.trim();
     if (!text) return;
 
-    // Optimistic update
     const optimisticMsg: ChatMessage = {
       id: -Date.now(),
       chatId,
@@ -185,116 +169,45 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
       seen: false,
       sentAt: new Date().toISOString(),
     };
+
     setMessages((prev) => [...prev, optimisticMsg]);
     setInputText('');
-
-    // Send via socket
     sendMessageSocket(chatId, text);
-
-    // Fallback: if socket fails, send via REST
-    // (the socket error handler will manage this, but for simplicity we rely on socket)
   }, [inputText, chatId, myUserId]);
 
   const handleLoadMore = useCallback(() => {
-    if (!hasMore || isLoadingMore || !nextCursor) return;
+    if (!hasMore || isLoadingMore || nextCursor == null) return;
     setIsLoadingMore(true);
     loadMessages(nextCursor);
   }, [hasMore, isLoadingMore, nextCursor, loadMessages]);
 
-  const renderMessage = useCallback(({ item, index }: { item: ChatMessage; index: number }) => {
-    const isMe = item.senderId !== otherUserId;
-    const isLastMessage = index === messages.length - 1;
-    const showSeen = isMe && isLastMessage && item.seen;
+  const renderMessage = useCallback(
+    ({ item, index }: { item: ChatMessage; index: number }) => {
+      const isMe = item.senderId !== otherUserId;
+      const isLastMessage = index === messages.length - 1;
+      const showSeen = isMe && isLastMessage && item.seen;
 
-    return (
-      <View style={[styles.messageRow, isMe ? styles.rowRight : styles.rowLeft]}>
-        <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
-          <Text style={[styles.messageText, isMe ? styles.textMe : styles.textOther]}>
-            {item.content}
-          </Text>
+      return (
+        <View style={[styles.messageRow, isMe ? styles.rowRight : styles.rowLeft]}>
+          <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
+            <Text style={[styles.messageText, isMe ? styles.textMe : styles.textOther]}>
+              {item.content}
+            </Text>
+          </View>
+          {showSeen && <Text style={styles.seenText}>Seen</Text>}
         </View>
-        {showSeen && (
-          <Text style={styles.seenText}>Seen</Text>
-        )}
-      </View>
-    );
-  }, [messages.length, otherUserId]);
+      );
+    },
+    [messages.length, otherUserId]
+  );
 
   const keyExtractor = useCallback((item: ChatMessage) => String(item.id), []);
 
-  const content = (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color={theme.colors.text} />
-        </TouchableOpacity>
-        <Image
-          source={{ uri: getImageUrl(otherUserImageUrl) }}
-          style={styles.headerAvatar}
-        />
-        <Text style={styles.headerName} numberOfLines={1}>
-          {otherUserName}
-        </Text>
-      </View>
-
-      {/* Messages */}
-      {isLoading && messages.length === 0 ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={theme.colors.primary} />
-        </View>
-      ) : (
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          renderItem={renderMessage}
-          keyExtractor={keyExtractor}
-          contentContainerStyle={styles.listContent}
-          onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.3}
-          ListFooterComponent={isLoadingMore ? (
-            <ActivityIndicator style={styles.loadMore} color={theme.colors.primary} />
-          ) : null}
-          maintainVisibleContentPosition={{
-            minIndexForVisible: 0,
-          }}
-        />
-      )}
-
-      {/* Input */}
-      <View style={styles.inputBar}>
-        <TextInput
-          style={styles.input}
-          value={inputText}
-          onChangeText={setInputText}
-          placeholder="Type a message..."
-          placeholderTextColor={theme.colors.textMuted}
-          multiline
-          maxLength={2000}
-        />
-        <TouchableOpacity
-          style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
-          onPress={handleSend}
-          disabled={!inputText.trim()}
-        >
-          <Feather name="send" size={20} color={inputText.trim() ? '#000' : theme.colors.textMuted} />
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
-  );
-
   if (error && messages.length === 0) {
     return (
-      <LinearGradient
-        colors={[theme.colors.surface, theme.colors.background]}
-        style={styles.container}
-      >
-        <SafeAreaView style={styles.container}>
-          <StatusBar barStyle="light-content" />
+      <LinearGradient colors={[theme.colors.surface, theme.colors.background]} style={styles.container}>
+        <SafeAreaView style={styles.flex}>
+          <RNStatusBar barStyle="light-content" translucent backgroundColor="transparent" />
           <View style={styles.errorRoot}>
             <Text style={styles.errorText}>{error}</Text>
             <TouchableOpacity style={styles.errorButton} onPress={() => navigation.goBack()}>
@@ -307,14 +220,96 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
   }
 
   return (
-    <LinearGradient
-      colors={[theme.colors.surface, theme.colors.background]}
-      style={styles.container}
-    >
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" />
-        {content}
-      </SafeAreaView>
+    <LinearGradient colors={[theme.colors.surface, theme.colors.background]} style={styles.container}>
+      <RNStatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}
+      >
+        <View style={styles.screen}>
+          <View
+            style={styles.headerWrapper}
+            //onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
+          >
+            <SafeAreaView edges={['top']}>
+              <View style={styles.header}>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                  <Feather name="arrow-left" size={24} color={theme.colors.text} />
+                </TouchableOpacity>
+
+                <Image
+                  source={{ uri: getImageUrl(otherUserImageUrl) }}
+                  style={styles.headerAvatar}
+                />
+
+                <Text style={styles.headerName} numberOfLines={1}>
+                  {otherUserName}
+                </Text>
+              </View>
+            </SafeAreaView>
+          </View>
+
+          <View style={styles.listWrapper}>
+            {isLoading && messages.length === 0 ? (
+              <View style={styles.center}>
+                <ActivityIndicator color={theme.colors.primary} />
+              </View>
+            ) : (
+              <FlatList
+                ref={flatListRef}
+                style={styles.list}
+                data={messages}
+                renderItem={renderMessage}
+                keyExtractor={keyExtractor}
+                contentContainerStyle={styles.listContent}
+                onEndReached={handleLoadMore}
+                onEndReachedThreshold={0.3}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="interactive"
+                ListFooterComponent={
+                  isLoadingMore ? (
+                    <ActivityIndicator style={styles.loadMore} color={theme.colors.primary} />
+                  ) : null
+                }
+                maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+              />
+            )}
+          </View>
+
+          <View
+            style={[
+              styles.inputBar,
+              {
+                paddingBottom: insets.bottom || 12,
+              },
+            ]}
+          >
+            <TextInput
+              style={styles.input}
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder="Type a message..."
+              placeholderTextColor={theme.colors.textMuted}
+              multiline
+              maxLength={2000}
+            />
+
+            <TouchableOpacity
+              style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
+              onPress={handleSend}
+              disabled={!inputText.trim()}
+            >
+              <Feather
+                name="send"
+                size={20}
+                color={inputText.trim() ? '#000' : theme.colors.textMuted}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
     </LinearGradient>
   );
 }
@@ -326,19 +321,27 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
+  screen: {
+    flex: 1,
+    minHeight: 0,
+  },
+  headerWrapper: {
+    backgroundColor: '#1e293b',
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 8 : 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    backgroundColor: 'rgba(30, 41, 59, 0.85)', // semi-transparent surface over gradient
+    paddingVertical: 12,
     gap: 12,
   },
   backButton: {
     padding: 4,
+    minWidth: 32,
+    minHeight: 32,
+    justifyContent: 'center',
   },
   headerAvatar: {
     width: 40,
@@ -352,9 +355,17 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.fontWeight.bold,
     flex: 1,
   },
+  listWrapper: {
+    flex: 1,
+    minHeight: 0,
+  },
+  list: {
+    flex: 1,
+  },
   listContent: {
     paddingHorizontal: 12,
     paddingVertical: 8,
+    flexGrow: 1,
   },
   messageRow: {
     marginVertical: 4,
@@ -397,13 +408,12 @@ const styles = StyleSheet.create({
   },
   inputBar: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 10,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
-    backgroundColor: 'rgba(30, 41, 59, 0.85)', // semi-transparent surface over gradient
+    backgroundColor: '#1e293b',
     gap: 8,
   },
   input: {
