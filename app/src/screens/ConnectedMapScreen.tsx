@@ -14,6 +14,7 @@ import MapView, { type Region } from 'react-native-maps';
 import * as SecureStore from 'expo-secure-store';
 import * as Notifications from 'expo-notifications';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -59,6 +60,7 @@ const getImageUrl = (imageUrl: string | null): string => {
 };
 
 export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenProps) {
+  const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
   const isActiveRef = useRef(true);
   const hasProfileRef = useRef(false);
@@ -358,7 +360,7 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={styles.disconnectButton}
+        style={[styles.disconnectButton, { bottom: insets.bottom > 0 ? insets.bottom + 10 : 40 }]}
         onPress={handleDisconnect}
         activeOpacity={0.75}
       >
