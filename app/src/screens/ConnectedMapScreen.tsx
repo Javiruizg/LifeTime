@@ -24,8 +24,6 @@ import { getMyProfile } from '../features/profile/profile.service';
 import type { Profile } from '../features/profile/profile.types';
 import type { VisibleUserPayload } from '../features/location/location.types';
 import { getOrCreatePrivateChat } from '../features/chat/chat.service';
-import { onChatNotification, shouldNotifyChat, clearChatNotification } from '../features/chat/chat.socket.service';
-import type { ChatMessage } from '../features/chat/chat.types';
 import { theme } from '../shared/lib/theme';
 import LiveMap from '../components/LiveMap';
 
@@ -108,8 +106,6 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
   try {
     const chat = await getOrCreatePrivateChat(userId);
     
-    clearChatNotification(chat.chatId);
-    
     setOtherUsers((prevUsers) =>
       prevUsers.map((u) =>
         u.userId === userId ? { ...u, hasUnread: false } : u
@@ -154,7 +150,7 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
 
   useEffect(() => {
     isActiveRef.current = true;
-    let unsubscribeChatMessage: (() => void) | undefined;
+
 
     const initialize = async () => {
       setIsInitializing(true);
@@ -271,40 +267,7 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
           handleSessionExpired();
         });
 
-        // 8. Listen for incoming chat notifications and show local notifications
-        unsubscribeChatMessage = onChatNotification((message: ChatMessage) => {
-          console.log('[ConnectedMapScreen] chat:notification received:', message);
-          if (!isActiveRef.current) return;
 
-          // 1. Actualizamos el estado de manera segura asegurándonos de mantener el hasUnread en True
-          setOtherUsers((prev) => {
-            const updatedUsers = prev.map((u) =>
-              u.userId === message.senderId ? { ...u, hasUnread: true } : u
-            );
-
-            // 2. En lugar de usar la ref de fuera, buscamos el remitente directamente del estado previo actualizado
-            const sender = updatedUsers.find((u) => u.userId === message.senderId);
-            
-            // Only notify once per chat until the user opens it
-            if (shouldNotifyChat(message.chatId) && sender) {
-              Notifications.scheduleNotificationAsync({
-                content: {
-                  title: `You have new messages from ${sender.profile?.name ?? 'Unknown'}`,
-                  body: message.content,
-                  data: {
-                    chatId: message.chatId,
-                    otherUserId: message.senderId,
-                    otherUserName: sender.profile?.name ?? 'Unknown',
-                    otherUserImageUrl: sender.profile?.imageUrl ?? null,
-                  },
-                },
-                trigger: null,
-              }).catch(() => {});
-            }
-
-            return updatedUsers;
-          });
-        });
       } catch (err) {
         if (isActiveRef.current) {
           setError('Failed to initialize connected map. Please try again.');
@@ -319,7 +282,6 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
       isActiveRef.current = false;
       getSocket()?.off('location:users');
       getSocket()?.off('location:session_expired');
-      unsubscribeChatMessage?.();
       stopSharing();
     };
   }, [navigation, handleSessionExpired, maybeHideSpinner]);

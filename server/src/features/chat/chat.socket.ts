@@ -54,13 +54,6 @@ export function registerChatSocketHandlers(io: Server): void {
 
         // Emit to all members in the chat room (both sender and receiver are here when in ChatScreen)
         io.to(`chat:${chatId}`).emit('chat:message', message);
-
-        // Also emit to the other user's personal room so they get it on the map / when not in chat
-        const otherUserId = await getOtherUserIdInChat(chatId, userId);
-        if (otherUserId) {
-          console.log(`[chat:send] emitting chat:notification to user:${otherUserId} for chat:${chatId}`);
-          io.to(`user:${otherUserId}`).emit('chat:notification', message);
-        }
       } catch (error) {
         console.error('chat:send error:', error);
         socket.emit('chat:error', { error: 'Failed to send message' });

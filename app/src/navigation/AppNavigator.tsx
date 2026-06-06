@@ -8,7 +8,6 @@ import ProfileScreen from '../screens/ProfileScreen';
 import ConnectedMapScreen from '../screens/ConnectedMapScreen';
 import ChatScreen from '../screens/ChatScreen';
 import { getAccessToken } from '../features/auth/auth.service';
-import { clearChatNotification } from '../features/chat/chat.socket.service';
 import { theme } from '../shared/lib/theme';
 
 export type RootStackParamList = {
@@ -60,17 +59,6 @@ export default function AppNavigator() {
           }
         }
 
-        if (data?.chatId && data?.otherUserId && data?.otherUserName) {
-          clearChatNotification(Number(data.chatId));
-          if (navigationRef.isReady()) {
-            navigationRef.navigate('Chat', {
-              chatId: Number(data.chatId),
-              otherUserId: Number(data.otherUserId),
-              otherUserName: String(data.otherUserName),
-              otherUserImageUrl: data.otherUserImageUrl ? String(data.otherUserImageUrl) : null,
-            });
-          }
-        }
       });
     } catch { /* ignore in test envs */ }
 
@@ -86,17 +74,7 @@ export default function AppNavigator() {
           }
         }
 
-        if (data?.chatId && data?.otherUserId && data?.otherUserName) {
-          clearChatNotification(Number(data.chatId));
-          if (navigationRef.isReady()) {
-            navigationRef.navigate('Chat', {
-              chatId: Number(data.chatId),
-              otherUserId: Number(data.otherUserId),
-              otherUserName: String(data.otherUserName),
-              otherUserImageUrl: data.otherUserImageUrl ? String(data.otherUserImageUrl) : null,
-            });
-          }
-        }
+        // Chat notification tap handling removed
       })
       .catch(() => { /* ignore in test envs */ });
 

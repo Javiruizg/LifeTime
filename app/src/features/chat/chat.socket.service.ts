@@ -28,17 +28,6 @@ export function onChatMessage(callback: (message: ChatMessage) => void): () => v
   };
 }
 
-export function onChatNotification(callback: (message: ChatMessage) => void): () => void {
-  const socket = getSocket();
-  if (!socket) {
-    return () => {};
-  }
-  socket.on('chat:notification', callback);
-  return () => {
-    socket.off('chat:notification', callback);
-  };
-}
-
 export function onChatSeen(callback: (payload: { chatId: number; byUserId: number }) => void): () => void {
   const socket = getSocket();
   if (!socket) {
@@ -61,24 +50,4 @@ export function onChatError(callback: (payload: { error: string }) => void): () 
   };
 }
 
-/* ------------------------------------------------------------------ */
-/*  Notification deduplication (one per chat until opened)            */
-/* ------------------------------------------------------------------ */
 
-const notifiedChatIds = new Set<number>();
-
-export function shouldNotifyChat(chatId: number): boolean {
-  if (notifiedChatIds.has(chatId)) {
-    return false;
-  }
-  notifiedChatIds.add(chatId);
-  return true;
-}
-
-export function clearChatNotification(chatId: number): void {
-  notifiedChatIds.delete(chatId);
-}
-
-export function clearAllChatNotifications(): void {
-  notifiedChatIds.clear();
-}
