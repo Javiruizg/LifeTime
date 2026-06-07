@@ -6,7 +6,12 @@ import type { SocketData } from '../shared/types/auth';
 const SOCKET_AUTH_ERROR = 'Unauthorized: missing token';
 
 export function setupSocket(httpServer: HttpServer): SocketIOServer {
-  const io = new SocketIOServer<SocketData>(httpServer);
+  const io = new SocketIOServer<SocketData>(httpServer, {
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    connectTimeout: 45000,
+    transports: ['websocket'],
+  });
 
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token as string | undefined;
@@ -34,8 +39,8 @@ export function setupSocket(httpServer: HttpServer): SocketIOServer {
     console.log(`User ${socket.data.userId} connected via WebSocket`);
     socket.join(`user:${socket.data.userId}`);
 
-    socket.on('disconnect', () => {
-      console.log(`User ${socket.data.userId} disconnected`);
+    socket.on('disconnect', (reason) => {
+      console.log(`User ${socket.data.userId} disconnected: ${reason}`);
     });
   });
 

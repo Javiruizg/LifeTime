@@ -26,11 +26,16 @@ export async function startSharing(
 
   try {
     await connectSocket();
+  } catch (err) {
+    console.error('Failed to connect socket:', err);
+    isStarting = false;
+    return;
+  }
 
+  try {
     locationWatcher = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.Balanced,
-        //distanceInterval: 20,
         timeInterval: 7000,
       },
       (position) => {
@@ -42,6 +47,9 @@ export async function startSharing(
         onPosition?.(coords);
       }
     );
+  } catch (err) {
+    console.error('Failed to start location watcher:', err);
+    stopSharing();
   } finally {
     isStarting = false;
   }

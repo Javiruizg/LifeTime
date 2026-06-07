@@ -10,19 +10,12 @@ const SOCKET_URL = process.env.EXPO_PUBLIC_SERVER_URL || 'http://localhost:3000'
 
 let socket: Socket | null = null;
 let isRefreshingToken = false;
-
-/* ------------------------------------------------------------------ */
-/*  Simple event emitter for auth failures                              */
-/* ------------------------------------------------------------------ */
+let isIntentionalDisconnect = false;
+let reconnectionAttempts = 0;
 
 type AuthFailureListener = () => void;
 const authFailureListeners: AuthFailureListener[] = [];
 
-/**
- * Register a listener that fires when the socket exhausts all auth
- * recovery options (refresh → relogin → logout).
- * Returns an unsubscribe function.
- */
 export function onSocketAuthFailure(listener: AuthFailureListener): () => void {
   authFailureListeners.push(listener);
   return () => {
@@ -37,16 +30,11 @@ function emitAuthFailure(): void {
   authFailureListeners.forEach((l) => l());
 }
 
-/* ------------------------------------------------------------------ */
-/*  Socket lifecycle                                                     */
-/* ------------------------------------------------------------------ */
-
 export async function connectSocket(): Promise<Socket> {
   if (socket?.connected) {
     return socket;
   }
 
-  // If socket exists but is disconnected, reuse the instance
   if (socket) {
     socket.connect();
     return socket;
@@ -57,15 +45,33 @@ export async function connectSocket(): Promise<Socket> {
     throw new Error('No access token available');
   }
 
+  isIntentionalDisconnect = false;
+  reconnectionAttempts = 0;
+
   socket = io(SOCKET_URL, {
     auth: { token },
     transports: ['websocket'],
+    timeout: 20000,
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 30000,
   });
 
   socket.on('connect_error', async (err: Error) => {
     console.error('Socket connect error:', err.message);
+    reconnectionAttempts++;
+
+    if (isIntentionalDisconnect) {
+      return;
+    }
 
     if (!err.message.includes('token expired')) {
+      if (reconnectionAttempts >= 5) {
+        console.error('Socket reconnection failed after 5 attempts');
+        socket?.disconnect();
+        socket = null;
+      }
       return;
     }
 
@@ -99,10 +105,18 @@ export async function connectSocket(): Promise<Socket> {
     }
   });
 
+  socket.on('disconnect', (reason) => {
+    console.log('Socket disconnected:', reason);
+    if (reason === 'io server disconnect' && !isIntentionalDisconnect) {
+      socket?.connect();
+    }
+  });
+
   return socket;
 }
 
 export function disconnectSocket(): void {
+  isIntentionalDisconnect = true;
   if (socket) {
     socket.disconnect();
     socket = null;

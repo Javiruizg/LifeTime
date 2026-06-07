@@ -31,6 +31,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@flydotio/dockerfile": "^0.7.10",
     "@types/cors": "^2.8.19",
     "@types/crypto-js": "^4.2.2",
     "@types/express": "^5.0.6",

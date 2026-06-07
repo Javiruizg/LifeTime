@@ -52,7 +52,7 @@ export async function getOrCreatePrivateChat(
   });
 
   if (existingChat) {
-    const otherMember = existingChat.members.find((m) => m.userId !== currentUserId);
+    const otherMember = existingChat.members.find((m: { userId: number }) => m.userId !== currentUserId);
     const otherProfile = otherMember?.user?.profile;
     if (!otherProfile) {
       throw new Error('Other user profile not found');
@@ -106,7 +106,7 @@ export async function getOrCreatePrivateChat(
     },
   });
 
-  const otherMember = chat.members.find((m) => m.userId !== currentUserId);
+  const otherMember = chat.members.find((m: { userId: number }) => m.userId !== currentUserId);
   const otherProfile = otherMember?.user?.profile;
   if (!otherProfile) {
     throw new Error('Other user profile not found after creation');

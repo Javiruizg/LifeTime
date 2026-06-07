@@ -1,0 +1,13 @@
+node_modules
+dist
+coverage
+.env
+.env.local
+.env.production
+uploads/*
+!.gitkeep
+npm-debug.log
+yarn-error.log
+.DS_Store
+*.log
+prisma/migrations/*/migration_engine.log

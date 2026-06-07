@@ -1,0 +1,25 @@
+# fly.toml app configuration file generated for lifetime-backend on 2026-06-07T02:25:59+02:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'lifetime-backend'
+primary_region = 'cdg'
+
+[build]
+
+[deploy]
+  release_command = 'npx prisma migrate deploy'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+[[vm]]
+  memory = '1gb'
+  cpus = 1
+  memory_mb = 1024

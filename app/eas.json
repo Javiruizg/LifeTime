@@ -14,14 +14,14 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://lifetime-backend-pre.onrender.com/api",
-        "EXPO_PUBLIC_SERVER_URL": "https://lifetime-backend-pre.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://lifetime-backend.fly.dev/api",
+        "EXPO_PUBLIC_SERVER_URL": "https://lifetime-backend.fly.dev"
       }
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://lifetime-backend-pre.onrender.com/api",
-        "EXPO_PUBLIC_SERVER_URL": "https://lifetime-backend-pre.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://lifetime-backend.fly.dev/api",
+        "EXPO_PUBLIC_SERVER_URL": "https://lifetime-backend.fly.dev"
       }
     }
   },
