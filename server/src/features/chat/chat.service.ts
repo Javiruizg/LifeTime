@@ -302,3 +302,18 @@ export async function getOtherUserIdInChat(
 
   return member?.userId ?? null;
 }
+
+export async function getOtherMemberIdsInChat(
+  chatId: number,
+  currentUserId: number
+): Promise<number[]> {
+  const members = await prisma.chatMember.findMany({
+    where: {
+      chatId,
+      userId: { not: currentUserId },
+    },
+    select: { userId: true },
+  });
+
+  return members.map((m) => m.userId);
+}

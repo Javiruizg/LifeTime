@@ -36,6 +36,8 @@ export function registerLocationSocketHandlers(io: Server): void {
         if (!stillExists) {
           socket.emit('location:session_expired');
           clearInterval(intervalId);
+          // Ensure group cleanup happens even when TTL expires (not just on explicit disconnect)
+          await disconnectUserLocation(userId);
           return;
         }
 

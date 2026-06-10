@@ -231,17 +231,22 @@ export async function onUserDisconnected(userId: number): Promise<void> {
  * Cascade from Chat deletes: GroupChat, Profile, ChatMembers, Messages.
  */
 export async function deleteGroup(chatId: number): Promise<void> {
-  // Notify members before deleting
+  // Clean up Redis: remove group references from all remaining members
+  const membersKey = `${GROUP_MEMBERS_PREFIX}:${chatId}`;
+  const remainingMembers = await redis.smembers(membersKey);
+
+  // Notify members before deleting — emit to both the chat room AND each user's personal room
+  // so that users on the map (who are not in the chat room) also receive the event
   try {
     const io = getIO();
     io.to(`chat:${chatId}`).emit('group:deleted', { chatId, reason: 'underflow' });
+    for (const uid of remainingMembers) {
+      io.to(`user:${uid}`).emit('group:deleted', { chatId, reason: 'underflow' });
+    }
   } catch {
     // Socket.IO not initialized (e.g., in tests)
   }
 
-  // Clean up Redis: remove group references from all remaining members
-  const membersKey = `${GROUP_MEMBERS_PREFIX}:${chatId}`;
-  const remainingMembers = await redis.smembers(membersKey);
   for (const uid of remainingMembers) {
     await redis.srem(`${USER_GROUPS_PREFIX}:${uid}`, String(chatId));
   }
