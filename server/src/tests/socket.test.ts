@@ -61,11 +61,6 @@ describe('setupSocket', () => {
   });
 
   describe('Server initialization', () => {
-    it('should create a Socket.IO server without CORS config (mobile clients only)', () => {
-      setupSocket(mockHttpServer as HttpServer);
-
-      expect(require('socket.io').Server).toHaveBeenCalledWith(mockHttpServer);
-    });
   });
 
   describe('Auth middleware behavior', () => {

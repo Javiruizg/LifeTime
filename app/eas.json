@@ -8,20 +8,23 @@
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_API_URL": "http://localhost:3000/api",
-        "EXPO_PUBLIC_SERVER_URL": "http://localhost:3000"
+        "EXPO_PUBLIC_SERVER_URL": "http://localhost:3000",
+        "GOOGLE_API_KEY": "AIzaSyB311KOsJLzrQtsfFRW1M8XiunZYABF5xg"
       }
     },
     "preview": {
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://lifetime-backend.fly.dev/api",
-        "EXPO_PUBLIC_SERVER_URL": "https://lifetime-backend.fly.dev"
+        "EXPO_PUBLIC_SERVER_URL": "https://lifetime-backend.fly.dev",
+        "GOOGLE_API_KEY": "AIzaSyB311KOsJLzrQtsfFRW1M8XiunZYABF5xg"
       }
     },
     "production": {
       "env": {
         "EXPO_PUBLIC_API_URL": "https://lifetime-backend.fly.dev/api",
-        "EXPO_PUBLIC_SERVER_URL": "https://lifetime-backend.fly.dev"
+        "EXPO_PUBLIC_SERVER_URL": "https://lifetime-backend.fly.dev",
+        "GOOGLE_API_KEY": "AIzaSyB311KOsJLzrQtsfFRW1M8XiunZYABF5xg"
       }
     }
   },
