@@ -173,9 +173,7 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
     loadMessages();
 
     joinChat(chatId);
-    if (!isGroup) {
-      markSeenSocket(chatId);
-    }
+    markSeenSocket(chatId);
 
     const unsubscribeMessage = onChatMessage((message) => {
       if (!isActiveRef.current) return;
