@@ -298,6 +298,7 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
         // 8. Listen for nearby groups
         getSocket()?.on('location:groups', (groups: NearbyGroup[]) => {
           if (!isActiveRef.current) return;
+          console.log(`[map] Received location:groups, count=${groups.length}`);
           setNearbyGroups((prevLocalGroups) => {
             return groups.map((serverGroup) => {
               const localGroup = prevLocalGroups.find((g) => g.chatId === serverGroup.chatId);
@@ -328,8 +329,13 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
 
         // 10. Listen for group deleted events
         getSocket()?.on('group:deleted', (payload: { chatId: number }) => {
+          console.log(`[map] Received group:deleted for chatId=${payload.chatId}`);
           if (!isActiveRef.current) return;
-          setNearbyGroups((prev) => prev.filter((g) => g.chatId !== payload.chatId));
+          setNearbyGroups((prev) => {
+            const filtered = prev.filter((g) => g.chatId !== payload.chatId);
+            console.log(`[map] Removed group ${payload.chatId}, groups left:`, filtered.length);
+            return filtered;
+          });
         });
 
       } catch (err) {

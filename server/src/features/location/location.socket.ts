@@ -91,9 +91,7 @@ export function registerLocationSocketHandlers(io: Server): void {
         }
 
         socket.emit('location:users', enrichedUsers);
-        if (nearbyGroups && nearbyGroups.length > 0) {
-          socket.emit('location:groups', nearbyGroups);
-        }
+        socket.emit('location:groups', nearbyGroups);
       } catch (error) {
         console.error('Location socket interval error:', error);
       }
