@@ -2,8 +2,11 @@ import { Server } from 'socket.io';
 import { z } from 'zod';
 import redis from '../../shared/lib/redis';
 import { updateUserLocation, findVisibleUsersFor } from './location.engine';
+import { disconnectUserLocation } from './location.service';
 import { prisma } from '../../shared/lib/prisma';
 import { hasUnreadFromUser } from '../chat/chat.service';
+import { onUserConnected, getNearbyGroups } from '../group/group.service';
+import type { GroupNearbyResponse } from '../group/group.types';
 
 const SESSION_KEY_PREFIX = 'location:session';
 
@@ -72,7 +75,23 @@ export function registerLocationSocketHandlers(io: Server): void {
           }));
         }
 
+        // Get nearby groups for the user
+        let nearbyGroups: GroupNearbyResponse[] = [];
+        try {
+          const session = await redis.hgetall(sessionKey);
+          const lat = parseFloat(session.lat);
+          const lng = parseFloat(session.lng);
+          if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+            nearbyGroups = await getNearbyGroups(lat, lng, 2000, userId);
+          }
+        } catch {
+          nearbyGroups = [];
+        }
+
         socket.emit('location:users', enrichedUsers);
+        if (nearbyGroups && nearbyGroups.length > 0) {
+          socket.emit('location:groups', nearbyGroups);
+        }
       } catch (error) {
         console.error('Location socket interval error:', error);
       }
@@ -93,17 +112,33 @@ export function registerLocationSocketHandlers(io: Server): void {
           return;
         }
 
+        // Check if this is the first location update (no previous lat/lng)
+        const sessionBefore = await redis.hgetall(sessionKey);
+        const hadLocation = sessionBefore.lat && sessionBefore.lng;
+
         await updateUserLocation(userId, parsed.data.latitude, parsed.data.longitude);
+
+        // If first location update, try to auto-create or join a group
+        if (!hadLocation) {
+          try {
+            await onUserConnected(userId);
+          } catch (error) {
+            console.error('Group auto-creation error:', error);
+          }
+        }
       } catch (error) {
         console.error('Location update error:', error);
       }
     });
 
     // Clean up interval on disconnect.
-    // Do NOT remove from geo set immediately (force-close resilience requirement).
-    // Lazy cleanup handles it.
+    // Immediate cleanup for group memberships is required so that groups
+    // drop members correctly and auto-delete when under 3.
     socket.on('disconnect', () => {
       clearInterval(intervalId);
+      disconnectUserLocation(userId).catch((err) => {
+        console.error('Error during disconnect cleanup:', err);
+      });
     });
   });
 }

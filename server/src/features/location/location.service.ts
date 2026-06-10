@@ -1,5 +1,6 @@
 import redis from '../../shared/lib/redis';
 import type { ConnectLocationResult, LocationSession } from './location.types';
+import { onUserDisconnected } from '../group/group.service';
 
 const SESSION_KEY_PREFIX = 'location:session';
 const GEO_KEY = 'geo:connected_users';
@@ -28,6 +29,9 @@ export async function connectUserLocation(
 }
 
 export async function disconnectUserLocation(userId: number): Promise<void> {
+  // Clean up group memberships before removing location session
+  await onUserDisconnected(userId);
+
   const key = `${SESSION_KEY_PREFIX}:${userId}`;
   await redis.del(key);
   await redis.zrem(GEO_KEY, String(userId));

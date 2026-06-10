@@ -46,3 +46,17 @@ export interface VisibleUserPayload {
 export interface SessionExpiredPayload {
   reason: 'ttl_expired';
 }
+
+/* ------------------------------------------------------------------ */
+/*  Group payload types                                               */
+/* ------------------------------------------------------------------ */
+
+export interface NearbyGroup {
+  chatId: number;
+  name: string;
+  latitude: number;
+  longitude: number;
+  imageUrl: string | null;
+  membersCount: number;
+  hasUnread: boolean;
+}

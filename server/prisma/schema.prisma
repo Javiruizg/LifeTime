@@ -43,12 +43,12 @@ model User {
 
 model Profile {
   id        Int     @id @default(autoincrement())
-  userId    Int     @unique @map("user_id")
+  userId    Int?    @unique @map("user_id")
   name      String  @default("Unnamed") @db.VarChar(20)
   message   String  @default("") @db.VarChar(50)
   imageUrl  String? @map("image_url")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Los grupos también tienen perfil
   groupChat GroupChat?
@@ -149,15 +149,14 @@ model Message {
 // ─────────────────────────────────────────────
 
 model GroupChat {
-  id              Int     @id @default(autoincrement())
-  chatId          Int     @unique @map("chat_id")
-  profileId       Int     @unique @map("profile_id")
-  createdById     Int     @map("created_by_id")
-  editableName    Boolean @default(false) @map("editable_name")
-  editableMessage Boolean @default(false) @map("editable_message")
-  editableImage   Boolean @default(false) @map("editable_image")
-  latitude        Float
-  longitude       Float
+  id          Int      @id @default(autoincrement())
+  chatId      Int      @unique @map("chat_id")
+  profileId   Int      @unique @map("profile_id")
+  createdById Int      @map("created_by_id")
+  latitude    Float
+  longitude   Float
+  radius      Float    @default(2000) @map("radius")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   chat      Chat    @relation(fields: [chatId], references: [id], onDelete: Cascade)
   profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)

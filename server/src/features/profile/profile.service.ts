@@ -13,7 +13,7 @@ export class ProfileService {
 
     return {
       id: profile.id,
-      userId: profile.userId,
+      userId: profile.userId!,
       name: profile.name,
       message: profile.message,
       imageUrl: profile.imageUrl ?? '/defaults/default-avatar.png',
@@ -31,7 +31,7 @@ export class ProfileService {
     console.log('Updated profile for userId: ', userId);
     return {
       id: profile.id,
-      userId: profile.userId,
+      userId: profile.userId!,
       name: profile.name,
       message: profile.message,
       imageUrl: profile.imageUrl ?? '/defaults/default-avatar.png',

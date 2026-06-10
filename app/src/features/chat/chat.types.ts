@@ -17,6 +17,11 @@ export interface ChatMessage {
   content: string;
   seen: boolean;
   sentAt: string;
+  senderProfile?: {
+    id: number;
+    name: string;
+    imageUrl: string | null;
+  };
 }
 
 export interface PaginatedMessagesResponse {

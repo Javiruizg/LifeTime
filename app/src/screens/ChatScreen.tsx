@@ -42,6 +42,7 @@ interface ChatScreenProps {
       otherUserId: number;
       otherUserName: string;
       otherUserImageUrl?: string | null;
+      isGroup?: boolean;
     };
   };
 }
@@ -58,7 +59,7 @@ const getImageUrl = (imageUrl: string | null | undefined): string => {
 };
 
 export default function ChatScreen({ navigation, route }: ChatScreenProps) {
-  const { chatId, otherUserId, otherUserName, otherUserImageUrl } = route.params;
+  const { chatId, otherUserId, otherUserName, otherUserImageUrl, isGroup = false } = route.params;
 
   const insets = useSafeAreaInsets();
 
@@ -172,7 +173,9 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
     loadMessages();
 
     joinChat(chatId);
-    markSeenSocket(chatId);
+    if (!isGroup) {
+      markSeenSocket(chatId);
+    }
 
     const unsubscribeMessage = onChatMessage((message) => {
       if (!isActiveRef.current) return;
@@ -193,7 +196,7 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
         return [...prev, message];
       });
 
-      if (message.senderId !== myUserId && message.senderId !== -1) {
+      if (!isGroup && message.senderId !== myUserId && message.senderId !== -1) {
         markSeenSocket(chatId);
       }
     });
@@ -201,6 +204,7 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
     const unsubscribeSeen = onChatSeen((payload) => {
       if (!isActiveRef.current) return;
       if (payload.chatId !== chatId) return;
+      if (isGroup) return;
 
       setMessages((prev) =>
         prev.map((msg) =>
@@ -243,13 +247,29 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
 
   const renderMessage = useCallback(
     ({ item, index }: { item: ChatMessage; index: number }) => {
-      const isMe = item.senderId !== otherUserId;
+      const isMe = isGroup
+        ? item.senderId === myUserId
+        : item.senderId !== otherUserId;
       const isLastMessage = index === messages.length - 1;
-      const showSeen = isMe && isLastMessage && item.seen;
+      const showSeen = !isGroup && isMe && isLastMessage && item.seen;
+      const senderProfile = item.senderProfile;
 
       return (
         <View style={[styles.messageRow, isMe ? styles.rowRight : styles.rowLeft]}>
+          {!isMe && isGroup && (
+            <Image
+              source={{
+                uri: senderProfile?.imageUrl
+                  ? getImageUrl(senderProfile.imageUrl)
+                  : getImageUrl(null),
+              }}
+              style={styles.senderAvatar}
+            />
+          )}
           <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
+            {isGroup && !isMe && senderProfile && (
+              <Text style={styles.senderName}>{senderProfile.name}</Text>
+            )}
             <Text style={[styles.messageText, isMe ? styles.textMe : styles.textOther]}>
               {item.content}
             </Text>
@@ -258,7 +278,7 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
         </View>
       );
     },
-    [messages.length, otherUserId]
+    [messages.length, otherUserId, myUserId, isGroup]
   );
 
   const keyExtractor = useCallback((item: ChatMessage) => String(item.id), []);
@@ -458,6 +478,19 @@ const styles = StyleSheet.create({
     color: theme.colors.textMuted,
     marginTop: 2,
     marginRight: 4,
+  },
+  senderAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginRight: 8,
+    backgroundColor: theme.colors.surfaceAlt,
+  },
+  senderName: {
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.primary,
+    fontWeight: '600',
+    marginBottom: 4,
   },
   inputBar: {
     position: 'absolute',

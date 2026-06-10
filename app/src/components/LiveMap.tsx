@@ -2,6 +2,7 @@ import { forwardRef, useImperativeHandle, useRef } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import MapView, { type Region, PROVIDER_DEFAULT } from 'react-native-maps';
 import UserMarker from './UserMarker';
+import GroupMarker from './GroupMarker';
 import type { Profile } from '../features/profile/profile.types';
 
 interface LiveMapProps {
@@ -16,8 +17,17 @@ interface LiveMapProps {
     coordinate: { latitude: number; longitude: number };
     hasUnread?: boolean;
   }>;
+  nearbyGroups?: Array<{
+    chatId: number;
+    name: string;
+    coordinate: { latitude: number; longitude: number };
+    imageUrl: string | null;
+    membersCount: number;
+    hasUnread: boolean;
+  }>;
   onRegionChange?: (region: Region) => void;
   onUserPress?: (userId: number) => void;
+  onGroupPress?: (chatId: number) => void;
 }
 
 const DARK_MAP_STYLE = [
@@ -44,7 +54,7 @@ const DARK_MAP_STYLE = [
 ];
 
 const LiveMap = forwardRef<MapView, LiveMapProps>(
-  ({ initialRegion, currentUser, otherUsers, onRegionChange, onUserPress }, ref) => {
+  ({ initialRegion, currentUser, otherUsers, nearbyGroups, onRegionChange, onUserPress, onGroupPress }, ref) => {
     const mapRef = useRef<MapView>(null);
 
     useImperativeHandle(ref, () => mapRef.current!);
@@ -78,7 +88,7 @@ const LiveMap = forwardRef<MapView, LiveMapProps>(
 
         {otherUsers?.map((user) => (
           <UserMarker
-            key={`${user.userId}-${user.hasUnread ? '1' : '0'}`}
+            key={`user-${user.userId}-${user.hasUnread ? '1' : '0'}`}
             coordinate={user.coordinate}
             profile={{
               message: user.profile.message,
@@ -87,6 +97,18 @@ const LiveMap = forwardRef<MapView, LiveMapProps>(
             isSelf={false}
             hasUnread={user.hasUnread}
             onPress={() => onUserPress?.(user.userId)}
+          />
+        ))}
+
+        {nearbyGroups?.map((group) => (
+          <GroupMarker
+            key={`group-${group.chatId}-${group.hasUnread ? '1' : '0'}`}
+            coordinate={group.coordinate}
+            name={group.name}
+            imageUrl={group.imageUrl}
+            membersCount={group.membersCount}
+            hasUnread={group.hasUnread}
+            onPress={() => onGroupPress?.(group.chatId)}
           />
         ))}
       </MapView>
