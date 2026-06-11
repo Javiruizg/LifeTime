@@ -91,6 +91,19 @@ describe('Group Engine', () => {
       expect(result).toEqual([1, 2, 3]);
     });
 
+    it('should return null if user has no location session', async () => {
+      mockRedis.scard.mockResolvedValue(0 as never);
+      mockFindVisibleUsersFor.mockResolvedValue([
+        { userId: '2', latitude: 40.4170, longitude: -3.7040, distance: 100 },
+        { userId: '3', latitude: 40.4165, longitude: -3.7025, distance: 150 },
+      ]);
+      mockRedis.hgetall.mockResolvedValue({} as never); // empty session
+
+      const result = await findCliqueForUser(1);
+
+      expect(result).toBeNull();
+    });
+
     it('should return null if not all mutually visible', async () => {
       mockRedis.scard.mockResolvedValue(0 as never);
       // First call: user 1 sees user 2 and 3 (initial check)
