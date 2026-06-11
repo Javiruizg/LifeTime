@@ -1,4 +1,5 @@
 import redis from '../../shared/lib/redis';
+import { prisma } from '../../shared/lib/prisma';
 
 const SESSION_KEY_PREFIX = 'location:session';
 const GEO_KEY = 'geo:connected_users';
@@ -91,4 +92,39 @@ export async function findVisibleUsersFor(userId: number): Promise<VisibleUser[]
   }
 
   return visibleUsers;
+}
+
+export interface ConnectedFriend {
+  userId: number;
+  latitude: number;
+  longitude: number;
+}
+
+export async function findConnectedFriendsFor(userId: number): Promise<ConnectedFriend[]> {
+  const friendships = await prisma.friendship.findMany({
+    where: {
+      OR: [{ userIdA: userId }, { userIdB: userId }],
+    },
+  });
+
+  const friends: ConnectedFriend[] = [];
+  for (const f of friendships) {
+    const friendId = f.userIdA === userId ? f.userIdB : f.userIdA;
+    const friendKey = `${SESSION_KEY_PREFIX}:${friendId}`;
+    const friendSession = await redis.hgetall(friendKey);
+
+    if (!friendSession || Object.keys(friendSession).length === 0) continue;
+
+    const friendLat = parseFloat(friendSession.lat);
+    const friendLng = parseFloat(friendSession.lng);
+    if (Number.isNaN(friendLat) || Number.isNaN(friendLng)) continue;
+
+    friends.push({
+      userId: friendId,
+      latitude: friendLat,
+      longitude: friendLng,
+    });
+  }
+
+  return friends;
 }

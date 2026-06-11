@@ -288,14 +288,14 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         <Image source={{ uri: `${SERVER_URL}${DEFAULT_AVATAR}` }} style={styles.floatButtonImg} />
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.floatButtonRight} activeOpacity={0.75}>
-        {profile ? (
-          <Image source={{ uri: getImageUrl(profile.imageUrl) }} style={styles.floatButtonImg} />
-        ) : (
-          <View style={styles.floatButtonFallback}>
-            <Feather name="users" size={22} color={theme.colors.text} />
-          </View>
-        )}
+      <TouchableOpacity
+        style={styles.floatButtonRight}
+        onPress={() => navigation.navigate('Social')}
+        activeOpacity={0.75}
+      >
+        <View style={styles.floatButtonFallback}>
+          <Feather name="users" size={22} color={theme.colors.text} />
+        </View>
       </TouchableOpacity>
 
       {!locationError && (

@@ -16,6 +16,7 @@ interface LiveMapProps {
     profile: Profile;
     coordinate: { latitude: number; longitude: number };
     hasUnread?: boolean;
+    isFriend?: boolean;
   }>;
   nearbyGroups?: Array<{
     chatId: number;
@@ -88,7 +89,7 @@ const LiveMap = forwardRef<MapView, LiveMapProps>(
 
         {otherUsers?.map((user) => (
           <UserMarker
-            key={`user-${user.userId}-${user.hasUnread ? '1' : '0'}`}
+            key={`user-${user.userId}-${user.isFriend ? 'f' : 'u'}-${user.hasUnread ? '1' : '0'}`}
             coordinate={user.coordinate}
             profile={{
               message: user.profile.message,
@@ -96,6 +97,7 @@ const LiveMap = forwardRef<MapView, LiveMapProps>(
             }}
             isSelf={false}
             hasUnread={user.hasUnread}
+            isFriend={user.isFriend}
             onPress={() => onUserPress?.(user.userId)}
           />
         ))}
