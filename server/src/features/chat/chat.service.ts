@@ -6,15 +6,18 @@ import type {
   MarkSeenResponse,
 } from './chat.types';
 
-function toMessageResponse(msg: {
-  id: number;
-  chatId: number;
-  senderId: number;
-  content: string;
-  seen: boolean;
-  sentAt: Date;
-}): ChatMessageResponse {
-  return {
+function toMessageResponse(
+  msg: {
+    id: number;
+    chatId: number;
+    senderId: number;
+    content: string;
+    seen: boolean;
+    sentAt: Date;
+  },
+  profile?: { id: number; name: string; imageUrl: string | null } | null
+): ChatMessageResponse {
+  const response: ChatMessageResponse = {
     id: msg.id,
     chatId: msg.chatId,
     senderId: msg.senderId,
@@ -22,6 +25,16 @@ function toMessageResponse(msg: {
     seen: msg.seen,
     sentAt: msg.sentAt.toISOString(),
   };
+
+  if (profile) {
+    response.senderProfile = {
+      id: profile.id,
+      name: profile.name,
+      imageUrl: profile.imageUrl,
+    };
+  }
+
+  return response;
 }
 
 export async function getOrCreatePrivateChat(
@@ -61,7 +74,7 @@ export async function getOrCreatePrivateChat(
       chatId: existingChat.id,
       otherUser: {
         id: otherProfile.id,
-        userId: otherProfile.userId,
+        userId: otherProfile.userId ?? 0,
         name: otherProfile.name,
         imageUrl: otherProfile.imageUrl ?? null,
       },
@@ -116,7 +129,7 @@ export async function getOrCreatePrivateChat(
     chatId: chat.id,
     otherUser: {
       id: otherProfile.id,
-      userId: otherProfile.userId,
+      userId: otherProfile.userId ?? 0,
       name: otherProfile.name,
       imageUrl: otherProfile.imageUrl ?? null,
     },
@@ -150,6 +163,13 @@ export async function getPaginatedMessages(
     },
     orderBy: { sentAt: 'desc' },
     take: limit + 1,
+    include: {
+      sender: {
+        include: {
+          profile: true,
+        },
+      },
+    },
   });
 
   const hasMore = messages.length > limit;
@@ -158,7 +178,9 @@ export async function getPaginatedMessages(
   }
 
   return {
-    messages: messages.map(toMessageResponse),
+    messages: messages.map((msg) =>
+      toMessageResponse(msg, msg.sender.profile)
+    ),
     nextCursor: hasMore ? messages[messages.length - 1].id : null,
     hasMore,
   };
@@ -190,9 +212,16 @@ export async function createMessage(
       content,
       seen: false,
     },
+    include: {
+      sender: {
+        include: {
+          profile: true,
+        },
+      },
+    },
   });
 
-  return toMessageResponse(message);
+  return toMessageResponse(message, message.sender.profile);
 }
 
 export async function markMessagesAsSeen(
@@ -272,4 +301,19 @@ export async function getOtherUserIdInChat(
   });
 
   return member?.userId ?? null;
+}
+
+export async function getOtherMemberIdsInChat(
+  chatId: number,
+  currentUserId: number
+): Promise<number[]> {
+  const members = await prisma.chatMember.findMany({
+    where: {
+      chatId,
+      userId: { not: currentUserId },
+    },
+    select: { userId: true },
+  });
+
+  return members.map((m) => m.userId);
 }

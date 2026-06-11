@@ -6,6 +6,7 @@ import uploadRouter from './features/upload/upload.routes';
 import profileRouter from './features/profile/profile.routes';
 import locationRouter from './features/location/location.routes';
 import chatRouter from './features/chat/chat.routes';
+import groupRouter from './features/group/group.routes';
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use('/api/upload', uploadRouter);
 app.use('/api/profile', profileRouter);
 app.use('/api/location', locationRouter);
 app.use('/api/chat', chatRouter);
+app.use('/api/group', groupRouter);
 
 // Error handler global
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

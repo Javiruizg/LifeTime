@@ -20,6 +20,7 @@ export type RootStackParamList = {
     otherUserId: number;
     otherUserName: string;
     otherUserImageUrl?: string | null;
+    isGroup?: boolean;
   };
 };
 

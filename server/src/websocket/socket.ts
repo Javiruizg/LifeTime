@@ -5,6 +5,8 @@ import type { SocketData } from '../shared/types/auth';
 
 const SOCKET_AUTH_ERROR = 'Unauthorized: missing token';
 
+let ioInstance: SocketIOServer | null = null;
+
 export function setupSocket(httpServer: HttpServer): SocketIOServer {
   const io = new SocketIOServer<SocketData>(httpServer, {
     pingTimeout: 60000,
@@ -12,6 +14,8 @@ export function setupSocket(httpServer: HttpServer): SocketIOServer {
     connectTimeout: 45000,
     transports: ['websocket'],
   });
+
+  ioInstance = io;
 
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token as string | undefined;
@@ -45,4 +49,11 @@ export function setupSocket(httpServer: HttpServer): SocketIOServer {
   });
 
   return io;
+}
+
+export function getIO(): SocketIOServer {
+  if (!ioInstance) {
+    throw new Error('Socket.IO not initialized');
+  }
+  return ioInstance;
 }

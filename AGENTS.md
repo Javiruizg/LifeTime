@@ -48,8 +48,13 @@ npm --prefix app install --legacy-peer-deps   # app requires legacy-peer-deps
 
 - Entry: `server/src/index.ts` (creates HTTP server, attaches WebSocket, starts Express).
 - App wiring: `server/src/app.ts` (middleware + route mounting).
-- Routes mount at `/api/{feature}` (currently `/api/auth`, `/api/upload`).
+- Routes mount at `/api/{feature}` (currently `/api/auth`, `/api/upload`, `/api/group`).
 - WebSocket: `server/src/websocket/socket.ts`.
+- Group module: `server/src/features/group/` — auto-creates group chats when 3+ users are mutually visible.
+- Group Redis keys:
+  - `user:groups:{userId}` — Set of group chat IDs the user is currently in.
+  - `group:members:{chatId}` — Set of connected user IDs for a group.
+  - `group:creation_lock:{geohash}` — Temporary lock to prevent duplicate group creation.
 - Prisma client is a **singleton** (`server/src/shared/lib/prisma.ts`) — never create additional PrismaClient instances.
 - Redis client: `server/src/shared/lib/redis.ts` — must call `redis.connect()` before use (done in `index.ts`).
 - Auth middleware: `server/src/shared/middleware/jwtAuth.ts` — adds `user` to `AuthenticatedRequest` (type from `shared/types/auth.ts`).

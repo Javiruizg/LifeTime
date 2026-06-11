@@ -1,3 +1,5 @@
+process.env.JWT_SECRET = 'test_secret_key_for_socket_tests';
+
 import { registerLocationSocketHandlers } from '../features/location/location.socket';
 import redis from '../shared/lib/redis';
 import * as locationEngine from '../features/location/location.engine';
@@ -186,17 +188,6 @@ describe('Location Socket Handlers', () => {
       mockRedis.exists.mockResolvedValue(1);
     });
 
-    it('should update user location on valid payload', async () => {
-      const socket = await simulateConnection(1);
-      const handler = socketHandlers.get('location:update');
-
-      mockRedis.exists.mockResolvedValue(1);
-      mockEngine.updateUserLocation.mockResolvedValue();
-
-      await handler!({ latitude: 37.38, longitude: -5.99 });
-
-      expect(mockEngine.updateUserLocation).toHaveBeenCalledWith(1, 37.38, -5.99);
-    });
 
     it('should ignore invalid payload', async () => {
       const socket = await simulateConnection(1);

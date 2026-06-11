@@ -4,6 +4,7 @@ import {
   createMessage,
   markMessagesAsSeen,
   getOtherUserIdInChat,
+  getOtherMemberIdsInChat,
 } from './chat.service';
 
 const sendMessageSchema = z.object({
@@ -78,9 +79,19 @@ export function registerChatSocketHandlers(io: Server): void {
             byUserId: userId,
           });
 
+          // For private chats, also notify the other user directly
           const otherUserId = await getOtherUserIdInChat(chatId, userId);
           if (otherUserId) {
             io.to(`user:${otherUserId}`).emit('chat:seen', {
+              chatId,
+              byUserId: userId,
+            });
+          }
+
+          // For group chats, notify all other members so they can update their UI
+          const otherMemberIds = await getOtherMemberIdsInChat(chatId, userId);
+          for (const memberId of otherMemberIds) {
+            io.to(`user:${memberId}`).emit('chat:seen', {
               chatId,
               byUserId: userId,
             });

@@ -124,7 +124,7 @@ describe('Chat Service', () => {
     it('should return messages when user is a member', async () => {
       mockPrisma.chatMember.findUnique.mockResolvedValue({ userId: 1, chatId: 5 } as any);
       mockPrisma.message.findMany.mockResolvedValue([
-        { id: 1, chatId: 5, senderId: 2, content: 'hi', seen: false, sentAt: new Date('2026-01-01') },
+        { id: 1, chatId: 5, senderId: 2, content: 'hi', seen: false, sentAt: new Date('2026-01-01'), sender: { profile: { id: 20, name: 'Bob', imageUrl: null } } },
       ] as any);
 
       const result = await getPaginatedMessages(5, 1, 50);
@@ -149,6 +149,7 @@ describe('Chat Service', () => {
         content: `msg ${51 - i}`,
         seen: false,
         sentAt: new Date(),
+        sender: { profile: { id: 20, name: 'Bob', imageUrl: null } },
       }));
       mockPrisma.message.findMany.mockResolvedValue(messages as any);
 
@@ -170,6 +171,7 @@ describe('Chat Service', () => {
         content: 'hello',
         seen: false,
         sentAt: new Date('2026-01-01'),
+        sender: { profile: { id: 10, name: 'Alice', imageUrl: null } },
       } as any);
 
       const result = await createMessage(5, 1, 'hello');

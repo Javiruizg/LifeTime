@@ -14,6 +14,9 @@ jest.mock('../shared/lib/redis', () => ({
     zrem: jest.fn(),
     hgetall: jest.fn(),
     ttl: jest.fn(),
+    smembers: jest.fn(),
+    srem: jest.fn(),
+    scard: jest.fn(),
   },
 }));
 
@@ -55,6 +58,9 @@ describe('Location Service', () => {
     it('should delete session and remove from geo set', async () => {
       mockRedis.del.mockResolvedValue(1 as never);
       mockRedis.zrem.mockResolvedValue(1 as never);
+      mockRedis.smembers.mockResolvedValue([] as never);
+      mockRedis.srem.mockResolvedValue(1 as never);
+      mockRedis.scard.mockResolvedValue(0 as never);
 
       await disconnectUserLocation(42);
 

@@ -23,8 +23,10 @@ import { startSharing, stopSharing } from '../features/location/location.socket.
 import { getSocket } from '../shared/lib/socket';
 import { getMyProfile } from '../features/profile/profile.service';
 import type { Profile } from '../features/profile/profile.types';
-import type { VisibleUserPayload } from '../features/location/location.types';
+import type { VisibleUserPayload, NearbyGroup } from '../features/location/location.types';
 import { getOrCreatePrivateChat } from '../features/chat/chat.service';
+import { joinGroup } from '../features/group/group.service';
+import { onNearbyGroups, onGroupCreated, onGroupDeleted } from '../features/group/group.socket.service';
 import { theme } from '../shared/lib/theme';
 import LiveMap from '../components/LiveMap';
 
@@ -70,6 +72,7 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
   const [profile, setProfile] = useState<Profile | null>(null);
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [otherUsers, setOtherUsers] = useState<VisibleUserPayload[]>([]);
+  const [nearbyGroups, setNearbyGroups] = useState<NearbyGroup[]>([]);
   const otherUsersRef = useRef(otherUsers);
   const [isInitializing, setIsInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -125,6 +128,31 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
     Alert.alert('Error', 'Could not open chat. Please try again.');
   }
 }, [navigation, otherUsers]);
+
+  const handleGroupPress = useCallback(async (chatId: number) => {
+    try {
+      await joinGroup(chatId);
+      
+      setNearbyGroups((prevGroups) =>
+        prevGroups.map((g) =>
+          g.chatId === chatId ? { ...g, hasUnread: false } : g
+        )
+      );
+
+      const group = nearbyGroups.find((g) => g.chatId === chatId);
+      navigation.navigate('Chat', {
+        chatId: chatId,
+        otherUserId: 0, // Not used for groups
+        otherUserName: group?.name ?? 'Group chat',
+        otherUserImageUrl: group?.imageUrl ?? null,
+        isGroup: true,
+      });
+    } catch (err) {
+      Alert.alert('Error', 'Could not join group chat. The group may have been deleted.');
+      // Remove stale group from local state so it disappears from the map
+      setNearbyGroups((prevGroups) => prevGroups.filter((g) => g.chatId !== chatId));
+    }
+  }, [navigation, nearbyGroups]);
 
   // Refresh profile whenever screen regains focus (e.g. after editing in ProfileScreen)
   useFocusEffect(
@@ -269,6 +297,48 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
           handleSessionExpired();
         });
 
+        // 8. Listen for nearby groups
+        getSocket()?.on('location:groups', (groups: NearbyGroup[]) => {
+          if (!isActiveRef.current) return;
+          console.log(`[map] Received location:groups, count=${groups.length}`);
+          setNearbyGroups((prevLocalGroups) => {
+            return groups.map((serverGroup) => {
+              const localGroup = prevLocalGroups.find((g) => g.chatId === serverGroup.chatId);
+              return {
+                ...serverGroup,
+                hasUnread: serverGroup.hasUnread || (localGroup?.hasUnread ?? false),
+              };
+            });
+          });
+        });
+
+        // 9. Listen for group created events
+        getSocket()?.on('group:created', (payload: { chatId: number; name: string; latitude: number; longitude: number; imageUrl: string | null; members: number[] }) => {
+          if (!isActiveRef.current) return;
+          setNearbyGroups((prev) => {
+            if (prev.some((g) => g.chatId === payload.chatId)) return prev;
+            return [...prev, {
+              chatId: payload.chatId,
+              name: payload.name,
+              latitude: payload.latitude,
+              longitude: payload.longitude,
+              imageUrl: payload.imageUrl,
+              membersCount: payload.members.length,
+              hasUnread: false,
+            }];
+          });
+        });
+
+        // 10. Listen for group deleted events
+        getSocket()?.on('group:deleted', (payload: { chatId: number }) => {
+          console.log(`[map] Received group:deleted for chatId=${payload.chatId}`);
+          if (!isActiveRef.current) return;
+          setNearbyGroups((prev) => {
+            const filtered = prev.filter((g) => g.chatId !== payload.chatId);
+            console.log(`[map] Removed group ${payload.chatId}, groups left:`, filtered.length);
+            return filtered;
+          });
+        });
 
       } catch (err) {
         if (isActiveRef.current) {
@@ -284,6 +354,9 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
       isActiveRef.current = false;
       getSocket()?.off('location:users');
       getSocket()?.off('location:session_expired');
+      getSocket()?.off('location:groups');
+      getSocket()?.off('group:created');
+      getSocket()?.off('group:deleted');
       stopSharing();
     };
   }, [navigation, handleSessionExpired, maybeHideSpinner]);
@@ -319,6 +392,18 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
     hasUnread: user.hasUnread ?? false,
   }));
 
+  const mappedNearbyGroups = nearbyGroups.map((group) => ({
+    chatId: group.chatId,
+    name: group.name,
+    coordinate: {
+      latitude: group.latitude,
+      longitude: group.longitude,
+    },
+    imageUrl: group.imageUrl,
+    membersCount: group.membersCount,
+    hasUnread: group.hasUnread,
+  }));
+
   const initialRegion = location
     ? { ...location, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA }
     : DEFAULT_REGION;
@@ -332,7 +417,9 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
         initialRegion={initialRegion}
         currentUser={currentUser}
         otherUsers={mappedOtherUsers}
+        nearbyGroups={mappedNearbyGroups}
         onUserPress={handleUserPress}
+        onGroupPress={handleGroupPress}
       />
 
       {isInitializing && (
