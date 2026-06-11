@@ -26,6 +26,7 @@ interface EnrichedFriend {
     message: string;
     imageUrl: string | null;
   } | null;
+  hasUnread: boolean;
 }
 
 export function registerLocationSocketHandlers(io: Server): void {
@@ -99,11 +100,13 @@ export function registerLocationSocketHandlers(io: Server): void {
               const profile = await prisma.profile.findUnique({
                 where: { userId: friend.userId },
               });
+              const hasUnread = await hasUnreadFromUser(userId, friend.userId);
               return {
                 userId: friend.userId,
                 latitude: friend.latitude,
                 longitude: friend.longitude,
                 profile: profile || null,
+                hasUnread,
               };
             })
           );

@@ -66,7 +66,29 @@ export async function sendFriendRequest(senderId: number, receiverId: number): P
       return;
     }
     if (reverseRequest.status === 'REJECTED') {
-      throw new Error('Cannot send friend request to this user');
+      await prisma.$transaction(async (tx) => {
+        await tx.friendRequest.delete({
+          where: { id: reverseRequest.id },
+        });
+        const newRequest = await tx.friendRequest.create({
+          data: {
+            senderId,
+            receiverId,
+            status: 'PENDING',
+          },
+        });
+
+        const senderProfile = await prisma.profile.findUnique({
+          where: { userId: senderId },
+        });
+        emitFriendRequestReceived(receiverId, {
+          requestId: newRequest.id,
+          senderId,
+          senderName: senderProfile?.name ?? 'Unnamed',
+          senderImageUrl: senderProfile?.imageUrl ?? null,
+        });
+      });
+      return;
     }
   }
 
@@ -116,8 +138,13 @@ export async function acceptFriendRequest(receiverId: number, requestId: number)
     await tx.friendship.create({
       data: { userIdA, userIdB },
     });
-    await tx.friendRequest.delete({
-      where: { id: request.id },
+    await tx.friendRequest.deleteMany({
+      where: {
+        OR: [
+          { senderId: request.senderId, receiverId: request.receiverId },
+          { senderId: request.receiverId, receiverId: request.senderId },
+        ],
+      },
     });
   });
 

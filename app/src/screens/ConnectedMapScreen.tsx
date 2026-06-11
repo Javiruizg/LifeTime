@@ -295,7 +295,7 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
                 longitude: serverFriend.longitude,
                 distance: 0,
                 profile: serverFriend.profile,
-                hasUnread: localUser?.hasUnread ?? false,
+                hasUnread: serverFriend.hasUnread || (localUser?.hasUnread ?? false),
                 isFriend: true,
               };
             });
@@ -418,6 +418,7 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
       longitude: user.longitude,
     },
     hasUnread: user.hasUnread ?? false,
+    isFriend: user.isFriend ?? false,
   }));
 
   const mappedNearbyGroups = nearbyGroups.map((group) => ({

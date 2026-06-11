@@ -1,8 +1,10 @@
 import {
   updateUserLocation,
   findVisibleUsersFor,
+  findConnectedFriendsFor,
 } from '../features/location/location.engine';
 import redis from '../shared/lib/redis';
+import { prisma } from '../shared/lib/prisma';
 
 jest.mock('../shared/lib/redis', () => ({
   __esModule: true,
@@ -15,7 +17,16 @@ jest.mock('../shared/lib/redis', () => ({
   },
 }));
 
+jest.mock('../shared/lib/prisma', () => ({
+  prisma: {
+    friendship: {
+      findMany: jest.fn(),
+    },
+  },
+}));
+
 const mockRedis = redis as jest.Mocked<typeof redis>;
+const mockPrisma = prisma as any;
 
 describe('Location Engine', () => {
   beforeEach(() => {
@@ -138,6 +149,67 @@ describe('Location Engine', () => {
 
       expect(result[0].latitude).toBe(0);
       expect(result[0].longitude).toBe(0);
+    });
+  });
+
+  describe('findConnectedFriendsFor', () => {
+    it('should return empty array when user has no friendships', async () => {
+      mockPrisma.friendship.findMany.mockResolvedValue([]);
+
+      const result = await findConnectedFriendsFor(42);
+
+      expect(result).toEqual([]);
+    });
+
+    it('should return friends with active sessions', async () => {
+      mockPrisma.friendship.findMany.mockResolvedValue([
+        { id: 1, userIdA: 42, userIdB: 99, createdAt: new Date() },
+        { id: 2, userIdA: 100, userIdB: 42, createdAt: new Date() },
+      ]);
+
+      mockRedis.hgetall
+        .mockResolvedValueOnce({ lat: '37.38', lng: '-5.99' } as never)
+        .mockResolvedValueOnce({ lat: '37.39', lng: '-6.00' } as never);
+
+      const result = await findConnectedFriendsFor(42);
+
+      expect(result).toHaveLength(2);
+      expect(result).toEqual([
+        { userId: 99, latitude: 37.38, longitude: -5.99 },
+        { userId: 100, latitude: 37.39, longitude: -6.00 },
+      ]);
+    });
+
+    it('should skip friends without active sessions', async () => {
+      mockPrisma.friendship.findMany.mockResolvedValue([
+        { id: 1, userIdA: 42, userIdB: 99, createdAt: new Date() },
+        { id: 2, userIdA: 42, userIdB: 100, createdAt: new Date() },
+      ]);
+
+      mockRedis.hgetall
+        .mockResolvedValueOnce({ lat: '37.38', lng: '-5.99' } as never)
+        .mockResolvedValueOnce({} as never);
+
+      const result = await findConnectedFriendsFor(42);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({ userId: 99, latitude: 37.38, longitude: -5.99 });
+    });
+
+    it('should skip friends with invalid lat/lng', async () => {
+      mockPrisma.friendship.findMany.mockResolvedValue([
+        { id: 1, userIdA: 42, userIdB: 99, createdAt: new Date() },
+        { id: 2, userIdA: 42, userIdB: 100, createdAt: new Date() },
+      ]);
+
+      mockRedis.hgetall
+        .mockResolvedValueOnce({ lat: 'bad', lng: 'bad' } as never)
+        .mockResolvedValueOnce({ lat: '37.39', lng: '-6.00' } as never);
+
+      const result = await findConnectedFriendsFor(42);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({ userId: 100, latitude: 37.39, longitude: -6.00 });
     });
   });
 });

@@ -444,4 +444,153 @@ describe('Friends endpoints', () => {
       expect(response.body.status).toBe('rejected');
     });
   });
+
+  describe('Reversible rejection', () => {
+    it('should allow sender to re-send after being rejected', async () => {
+      await request(app)
+        .post('/api/friends/request')
+        .set('Authorization', `Bearer ${userA.token}`)
+        .send({ receiverId: userB.userId });
+
+      const requests = await request(app)
+        .get('/api/friends/requests')
+        .set('Authorization', `Bearer ${userB.token}`);
+
+      await request(app)
+        .post(`/api/friends/reject/${requests.body[0].id}`)
+        .set('Authorization', `Bearer ${userB.token}`);
+
+      const response = await request(app)
+        .post('/api/friends/request')
+        .set('Authorization', `Bearer ${userB.token}`)
+        .send({ receiverId: userA.userId });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+    });
+
+    it('should block original sender after being rejected', async () => {
+      await request(app)
+        .post('/api/friends/request')
+        .set('Authorization', `Bearer ${userA.token}`)
+        .send({ receiverId: userB.userId });
+
+      const requests = await request(app)
+        .get('/api/friends/requests')
+        .set('Authorization', `Bearer ${userB.token}`);
+
+      await request(app)
+        .post(`/api/friends/reject/${requests.body[0].id}`)
+        .set('Authorization', `Bearer ${userB.token}`);
+
+      const response = await request(app)
+        .post('/api/friends/request')
+        .set('Authorization', `Bearer ${userA.token}`)
+        .send({ receiverId: userB.userId });
+
+      expect(response.status).toBe(409);
+    });
+
+    it('should clean up rejected request when auto-accepting', async () => {
+      await request(app)
+        .post('/api/friends/request')
+        .set('Authorization', `Bearer ${userA.token}`)
+        .send({ receiverId: userB.userId });
+
+      const response = await request(app)
+        .post('/api/friends/request')
+        .set('Authorization', `Bearer ${userB.token}`)
+        .send({ receiverId: userA.userId });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+
+      const friendsA = await request(app)
+        .get('/api/friends')
+        .set('Authorization', `Bearer ${userA.token}`);
+      expect(friendsA.body).toHaveLength(1);
+      expect(friendsA.body[0].userId).toBe(userB.userId);
+
+      const pendingRequests = await prisma.friendRequest.findMany({
+        where: {
+          OR: [
+            { senderId: userA.userId, receiverId: userB.userId },
+            { senderId: userB.userId, receiverId: userA.userId },
+          ],
+        },
+      });
+      expect(pendingRequests).toHaveLength(0);
+    });
+
+    it('should clean up rejected request on manual accept', async () => {
+      await request(app)
+        .post('/api/friends/request')
+        .set('Authorization', `Bearer ${userA.token}`)
+        .send({ receiverId: userB.userId });
+
+      const requestsBtoA = await request(app)
+        .get('/api/friends/requests')
+        .set('Authorization', `Bearer ${userB.token}`);
+
+      await request(app)
+        .post(`/api/friends/reject/${requestsBtoA.body[0].id}`)
+        .set('Authorization', `Bearer ${userB.token}`);
+
+      await request(app)
+        .post('/api/friends/request')
+        .set('Authorization', `Bearer ${userB.token}`)
+        .send({ receiverId: userA.userId });
+
+      const requestsAtoB = await request(app)
+        .get('/api/friends/requests')
+        .set('Authorization', `Bearer ${userA.token}`);
+
+      await request(app)
+        .post(`/api/friends/accept/${requestsAtoB.body[0].id}`)
+        .set('Authorization', `Bearer ${userA.token}`);
+
+      const friendsA = await request(app)
+        .get('/api/friends')
+        .set('Authorization', `Bearer ${userA.token}`);
+      expect(friendsA.body).toHaveLength(1);
+      expect(friendsA.body[0].userId).toBe(userB.userId);
+
+      const pendingRequests = await prisma.friendRequest.findMany({
+        where: {
+          OR: [
+            { senderId: userA.userId, receiverId: userB.userId },
+            { senderId: userB.userId, receiverId: userA.userId },
+          ],
+        },
+      });
+      expect(pendingRequests).toHaveLength(0);
+    });
+
+    it('should return correct status after rejection reversal', async () => {
+      await request(app)
+        .post('/api/friends/request')
+        .set('Authorization', `Bearer ${userA.token}`)
+        .send({ receiverId: userB.userId });
+
+      const requests = await request(app)
+        .get('/api/friends/requests')
+        .set('Authorization', `Bearer ${userB.token}`);
+
+      await request(app)
+        .post(`/api/friends/reject/${requests.body[0].id}`)
+        .set('Authorization', `Bearer ${userB.token}`);
+
+      await request(app)
+        .post('/api/friends/request')
+        .set('Authorization', `Bearer ${userB.token}`)
+        .send({ receiverId: userA.userId });
+
+      const response = await request(app)
+        .get(`/api/friends/status/${userB.userId}`)
+        .set('Authorization', `Bearer ${userA.token}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe('pending_received');
+    });
+  });
 });

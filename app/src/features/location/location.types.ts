@@ -56,6 +56,7 @@ export interface ConnectedFriendPayload {
   latitude: number;
   longitude: number;
   profile: VisibleUserProfile | null;
+  hasUnread: boolean;
 }
 
 export interface NearbyGroup {
