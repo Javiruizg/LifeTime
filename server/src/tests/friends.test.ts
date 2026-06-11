@@ -1,8 +1,20 @@
+jest.mock('../shared/lib/redis', () => ({
+  __esModule: true,
+  default: {
+    exists: jest.fn().mockResolvedValue(0),
+    hset: jest.fn(),
+    expire: jest.fn(),
+    del: jest.fn(),
+  },
+}));
+
 import request from 'supertest';
 import app from '../app';
 import { prisma } from '../shared/lib/prisma';
 import redis from '../shared/lib/redis';
 import { hashToken } from '../shared/lib/hash';
+
+const mockRedis = redis as jest.Mocked<typeof redis>;
 
 const DEVICE_A = 'friends-test-device-a';
 const DEVICE_B = 'friends-test-device-b';
@@ -50,6 +62,8 @@ describe('Friends endpoints', () => {
   let userC: { token: string; userId: number };
 
   beforeEach(async () => {
+    jest.clearAllMocks();
+    mockRedis.exists.mockResolvedValue(0);
     await cleanupUsers();
     userA = await createUser(DEVICE_A);
     userB = await createUser(DEVICE_B);
@@ -300,9 +314,7 @@ describe('Friends endpoints', () => {
         .post(`/api/friends/accept/${requests.body[0].id}`)
         .set('Authorization', `Bearer ${userB.token}`);
 
-      // Simulate B online
-      await redis.hset(`location:session:${userB.userId}`, { range: '1000', connectedAt: '1' });
-      await redis.expire(`location:session:${userB.userId}`, 3600);
+      mockRedis.exists.mockResolvedValue(1);
 
       const response = await request(app)
         .get('/api/friends')
@@ -314,9 +326,6 @@ describe('Friends endpoints', () => {
       expect(response.body[0]).toHaveProperty('profile');
       expect(response.body[0]).toHaveProperty('isOnline');
       expect(response.body[0].isOnline).toBe(true);
-
-      // Cleanup redis
-      await redis.del(`location:session:${userB.userId}`);
     });
 
     it('should return empty array if no friends', async () => {
