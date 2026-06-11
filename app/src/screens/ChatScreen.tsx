@@ -252,9 +252,14 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
       const showSeen = !isGroup && isMe && isLastMessage && item.seen;
       const senderProfile = item.senderProfile;
 
+      const prevItem = index > 0 ? messages[index - 1] : null;
+      const isSameSenderAsPrev = prevItem && prevItem.senderId === item.senderId;
+      const showAvatar = !isMe && isGroup && !isSameSenderAsPrev;
+      const showName = isGroup && !isMe && !isSameSenderAsPrev && senderProfile;
+
       return (
         <View style={[styles.messageRow, isMe ? styles.rowRight : styles.rowLeft]}>
-          {!isMe && isGroup && (
+          {showAvatar && (
             <Image
               source={{
                 uri: senderProfile?.imageUrl
@@ -265,7 +270,7 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
             />
           )}
           <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
-            {isGroup && !isMe && senderProfile && (
+            {showName && (
               <Text style={styles.senderName}>{senderProfile.name}</Text>
             )}
             <Text style={[styles.messageText, isMe ? styles.textMe : styles.textOther]}>
@@ -276,7 +281,7 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
         </View>
       );
     },
-    [messages.length, otherUserId, myUserId, isGroup]
+    [messages, otherUserId, myUserId, isGroup]
   );
 
   const keyExtractor = useCallback((item: ChatMessage) => String(item.id), []);

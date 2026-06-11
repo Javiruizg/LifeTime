@@ -148,7 +148,9 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
         isGroup: true,
       });
     } catch (err) {
-      Alert.alert('Error', 'Could not join group chat. Please try again.');
+      Alert.alert('Error', 'Could not join group chat. The group may have been deleted.');
+      // Remove stale group from local state so it disappears from the map
+      setNearbyGroups((prevGroups) => prevGroups.filter((g) => g.chatId !== chatId));
     }
   }, [navigation, nearbyGroups]);
 
