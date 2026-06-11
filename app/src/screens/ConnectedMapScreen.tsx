@@ -23,7 +23,7 @@ import { startSharing, stopSharing } from '../features/location/location.socket.
 import { getSocket } from '../shared/lib/socket';
 import { getMyProfile } from '../features/profile/profile.service';
 import type { Profile } from '../features/profile/profile.types';
-import type { VisibleUserPayload, NearbyGroup } from '../features/location/location.types';
+import type { VisibleUserPayload, NearbyGroup, ConnectedFriendPayload, LocationUsersPayload } from '../features/location/location.types';
 import { getOrCreatePrivateChat } from '../features/chat/chat.service';
 import { joinGroup } from '../features/group/group.service';
 import { onNearbyGroups, onGroupCreated, onGroupDeleted } from '../features/group/group.socket.service';
@@ -71,7 +71,7 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [otherUsers, setOtherUsers] = useState<VisibleUserPayload[]>([]);
+  const [otherUsers, setOtherUsers] = useState<(VisibleUserPayload & { isFriend?: boolean })[]>([]);
   const [nearbyGroups, setNearbyGroups] = useState<NearbyGroup[]>([]);
   const otherUsersRef = useRef(otherUsers);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -269,20 +269,49 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
           });
         }
 
-        // 6. Listen for visible users
-        getSocket()?.on('location:users', (serverUsers: VisibleUserPayload[]) => {
+        // 6. Listen for visible users and friends
+        getSocket()?.on('location:users', (payload: LocationUsersPayload) => {
           if (!isActiveRef.current) return;
-          
+
+          const { users: serverUsers, friends: serverFriends } = payload;
+
           setOtherUsers((prevLocalUsers) => {
-            return serverUsers.map((serverUser) => {
-              // Buscamos si localmente ya sabíamos que este usuario nos había mandado un mensaje
+            // Process visible users
+            const visibleUsers = serverUsers.map((serverUser) => {
               const localUser = prevLocalUsers.find((u) => u.userId === serverUser.userId);
               return {
                 ...serverUser,
-                // Si el servidor dice que es unread, o si localmente ya lo teníamos como unread, se queda en true
                 hasUnread: serverUser.hasUnread || (localUser?.hasUnread ?? false),
+                isFriend: false,
               };
             });
+
+            // Process connected friends
+            const friendUsers = serverFriends.map((serverFriend) => {
+              const localUser = prevLocalUsers.find((u) => u.userId === serverFriend.userId);
+              return {
+                userId: serverFriend.userId,
+                latitude: serverFriend.latitude,
+                longitude: serverFriend.longitude,
+                distance: 0,
+                profile: serverFriend.profile,
+                hasUnread: serverFriend.hasUnread || (localUser?.hasUnread ?? false),
+                isFriend: true,
+              };
+            });
+
+            // Merge: if a friend is also in visible users, keep the friend version
+            const merged = [...visibleUsers];
+            friendUsers.forEach((friend) => {
+              const existingIndex = merged.findIndex((u) => u.userId === friend.userId);
+              if (existingIndex !== -1) {
+                merged[existingIndex] = friend;
+              } else {
+                merged.push(friend);
+              }
+            });
+
+            return merged;
           });
 
           if (!hasUsersRef.current) {
@@ -300,7 +329,6 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
         // 8. Listen for nearby groups
         getSocket()?.on('location:groups', (groups: NearbyGroup[]) => {
           if (!isActiveRef.current) return;
-          console.log(`[map] Received location:groups, count=${groups.length}`);
           setNearbyGroups((prevLocalGroups) => {
             return groups.map((serverGroup) => {
               const localGroup = prevLocalGroups.find((g) => g.chatId === serverGroup.chatId);
@@ -390,6 +418,7 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
       longitude: user.longitude,
     },
     hasUnread: user.hasUnread ?? false,
+    isFriend: user.isFriend ?? false,
   }));
 
   const mappedNearbyGroups = nearbyGroups.map((group) => ({
@@ -436,14 +465,14 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
         <Image source={{ uri: `${SERVER_URL}${DEFAULT_AVATAR}` }} style={styles.floatButtonImg} />
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.floatButtonRight} activeOpacity={0.75}>
-        {profile ? (
-          <Image source={{ uri: getImageUrl(profile.imageUrl) }} style={styles.floatButtonImg} />
-        ) : (
-          <View style={styles.floatButtonFallback}>
-            <Feather name="users" size={22} color={theme.colors.text} />
-          </View>
-        )}
+      <TouchableOpacity
+        style={styles.floatButtonRight}
+        onPress={() => navigation.navigate('Social')}
+        activeOpacity={0.75}
+      >
+        <View style={styles.floatButtonFallback}>
+          <Feather name="users" size={22} color={theme.colors.text} />
+        </View>
       </TouchableOpacity>
 
       <TouchableOpacity

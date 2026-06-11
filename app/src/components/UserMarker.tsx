@@ -14,6 +14,7 @@ interface UserMarkerProps {
   };
   isSelf?: boolean;
   hasUnread?: boolean;
+  isFriend?: boolean;
   onPress?: () => void;
 }
 
@@ -35,13 +36,13 @@ const getImageUrl = (imageUrl: string | null): string => {
   return `${SERVER_URL}${imageUrl}`;
 };
 
-export default function UserMarker({ coordinate, profile, isSelf = false, hasUnread = false, onPress }: UserMarkerProps) {
+export default function UserMarker({ coordinate, profile, isSelf = false, hasUnread = false, isFriend = false, onPress }: UserMarkerProps) {
   const [hasError, setHasError] = useState(false);
 
   const imageUri = hasError ? `${SERVER_URL}${DEFAULT_AVATAR}` : getImageUrl(profile.imageUrl);
   const showBubble = !!profile.message && profile.message.trim() !== '';
   const accentColor = isSelf ? '#22d3ee' : '#384954ff';
-  const borderColor = hasUnread ? '#EF4444' : accentColor;
+  const borderColor = hasUnread ? '#EF4444' : isFriend ? '#FFFFFF' : accentColor;
 
   return (
     <Marker coordinate={coordinate} anchor={{ x: 0.5, y: 1 }} onPress={onPress}>

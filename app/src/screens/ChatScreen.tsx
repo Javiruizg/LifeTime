@@ -13,6 +13,7 @@ import {
   Keyboard,
   Animated,
   Easing,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -30,6 +31,19 @@ import {
 } from '../features/chat/chat.socket.service';
 import type { ChatMessage } from '../features/chat/chat.types';
 import { getUserId } from '../features/auth/auth.service';
+import {
+  getFriendStatus,
+  sendFriendRequest,
+  cancelFriendRequest,
+  acceptFriendRequest,
+  rejectFriendRequest,
+} from '../features/friends/friends.service';
+import {
+  onFriendRequestReceived,
+  onFriendRequestAccepted,
+  onFriendRemoved,
+} from '../features/friends/friends.socket.service';
+import type { FriendStatus } from '../features/friends/friends.types';
 import { theme } from '../shared/lib/theme';
 
 type ChatScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Chat'>;
@@ -71,6 +85,7 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
   const [nextCursor, setNextCursor] = useState<number | null>(null);
   const [myUserId, setMyUserId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [friendStatus, setFriendStatus] = useState<FriendStatus | null>(null);
 
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   const isActiveRef = useRef(true);
@@ -141,6 +156,33 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (isGroup) return;
+    getFriendStatus(otherUserId)
+      .then((status) => setFriendStatus(status))
+      .catch(() => {});
+  }, [otherUserId, isGroup]);
+
+  useEffect(() => {
+    if (isGroup) return;
+    const unsubReceived = onFriendRequestReceived(() => {
+      getFriendStatus(otherUserId)
+        .then((status) => setFriendStatus(status))
+        .catch(() => {});
+    });
+    const unsubAccepted = onFriendRequestAccepted(() => {
+      setFriendStatus({ status: 'friends' });
+    });
+    const unsubRemoved = onFriendRemoved(() => {
+      setFriendStatus({ status: 'none' });
+    });
+    return () => {
+      unsubReceived();
+      unsubAccepted();
+      unsubRemoved();
+    };
+  }, [otherUserId, isGroup]);
 
   const loadMessages = useCallback(
     async (cursor?: number) => {
@@ -286,6 +328,44 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
 
   const keyExtractor = useCallback((item: ChatMessage) => String(item.id), []);
 
+  const handleSendFriendRequest = useCallback(async () => {
+    try {
+      await sendFriendRequest(otherUserId);
+      setFriendStatus({ status: 'pending_sent' });
+    } catch {
+      Alert.alert('Error', 'Could not send friend request');
+    }
+  }, [otherUserId]);
+
+  const handleCancelFriendRequest = useCallback(async () => {
+    try {
+      await cancelFriendRequest(otherUserId);
+      setFriendStatus({ status: 'none' });
+    } catch {
+      Alert.alert('Error', 'Could not cancel friend request');
+    }
+  }, [otherUserId]);
+
+  const handleAcceptFriendRequest = useCallback(async () => {
+    if (!friendStatus?.requestId) return;
+    try {
+      await acceptFriendRequest(friendStatus.requestId);
+      setFriendStatus({ status: 'friends' });
+    } catch {
+      Alert.alert('Error', 'Could not accept friend request');
+    }
+  }, [friendStatus]);
+
+  const handleRejectFriendRequest = useCallback(async () => {
+    if (!friendStatus?.requestId) return;
+    try {
+      await rejectFriendRequest(friendStatus.requestId);
+      setFriendStatus({ status: 'none' });
+    } catch {
+      Alert.alert('Error', 'Could not reject friend request');
+    }
+  }, [friendStatus]);
+
   if (error && messages.length === 0) {
     return (
       <LinearGradient colors={[theme.colors.surface, theme.colors.background]} style={styles.container}>
@@ -318,6 +398,53 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
             <Text style={styles.headerName} numberOfLines={1}>
               {otherUserName}
             </Text>
+
+            {!isGroup && friendStatus && (
+              <View style={styles.friendActionContainer}>
+                {friendStatus.status === 'none' && (
+                  <TouchableOpacity
+                    style={styles.addFriendButton}
+                    onPress={handleSendFriendRequest}
+                    activeOpacity={0.75}
+                  >
+                    <Feather name="plus" size={18} color="#fff" />
+                  </TouchableOpacity>
+                )}
+                {friendStatus.status === 'pending_sent' && (
+                  <View style={styles.pendingSentRow}>
+                    <Text style={styles.pendingSentText}>Friend request sent</Text>
+                    <TouchableOpacity
+                      style={styles.cancelRequestButton}
+                      onPress={handleCancelFriendRequest}
+                      activeOpacity={0.75}
+                    >
+                      <Feather name="x" size={14} color={theme.colors.textMuted} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+                {friendStatus.status === 'pending_received' && (
+                  <View style={styles.pendingReceivedRow}>
+                    <Text style={styles.pendingReceivedText}>Friend request received</Text>
+                    <View style={styles.pendingReceivedActions}>
+                      <TouchableOpacity
+                        style={[styles.pendingActionButton, styles.pendingActionAccept]}
+                        onPress={handleAcceptFriendRequest}
+                        activeOpacity={0.75}
+                      >
+                        <Feather name="check" size={16} color={theme.colors.success} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.pendingActionButton, styles.pendingActionReject]}
+                        onPress={handleRejectFriendRequest}
+                        activeOpacity={0.75}
+                      >
+                        <Feather name="x" size={16} color={theme.colors.danger} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </View>
+            )}
           </View>
         </View>
 
@@ -560,5 +687,59 @@ const styles = StyleSheet.create({
     color: '#000',
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold,
+  },
+  friendActionContainer: {
+    marginLeft: 'auto',
+    alignItems: 'flex-end',
+  },
+  addFriendButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.colors.success,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pendingSentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pendingSentText: {
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textMuted,
+  },
+  cancelRequestButton: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: theme.colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pendingReceivedRow: {
+    alignItems: 'flex-end',
+  },
+  pendingReceivedText: {
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textMuted,
+    marginBottom: 4,
+  },
+  pendingReceivedActions: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  pendingActionButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pendingActionAccept: {
+    backgroundColor: 'rgba(52, 211, 153, 0.2)',
+  },
+  pendingActionReject: {
+    backgroundColor: 'rgba(186, 21, 21, 0.2)',
   },
 });

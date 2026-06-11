@@ -1,7 +1,7 @@
 import { Server } from 'socket.io';
 import { z } from 'zod';
 import redis from '../../shared/lib/redis';
-import { updateUserLocation, findVisibleUsersFor } from './location.engine';
+import { updateUserLocation, findVisibleUsersFor, findConnectedFriendsFor } from './location.engine';
 import { disconnectUserLocation } from './location.service';
 import { prisma } from '../../shared/lib/prisma';
 import { hasUnreadFromUser } from '../chat/chat.service';
@@ -14,6 +14,20 @@ const locationUpdateSchema = z.object({
   latitude: z.number(),
   longitude: z.number(),
 });
+
+interface EnrichedFriend {
+  userId: number;
+  latitude: number;
+  longitude: number;
+  profile: {
+    id: number;
+    userId: number | null;
+    name: string;
+    message: string;
+    imageUrl: string | null;
+  } | null;
+  hasUnread: boolean;
+}
 
 export function registerLocationSocketHandlers(io: Server): void {
   //This is executed everytime a client connects to the WebSocket server. We set up event handlers for location updates and disconnections here.
@@ -77,6 +91,29 @@ export function registerLocationSocketHandlers(io: Server): void {
           }));
         }
 
+        // Get connected friends for the user
+        let enrichedFriends: EnrichedFriend[];
+        try {
+          const connectedFriends = await findConnectedFriendsFor(userId);
+          enrichedFriends = await Promise.all(
+            connectedFriends.map(async (friend) => {
+              const profile = await prisma.profile.findUnique({
+                where: { userId: friend.userId },
+              });
+              const hasUnread = await hasUnreadFromUser(userId, friend.userId);
+              return {
+                userId: friend.userId,
+                latitude: friend.latitude,
+                longitude: friend.longitude,
+                profile: profile || null,
+                hasUnread,
+              };
+            })
+          );
+        } catch {
+          enrichedFriends = [];
+        }
+
         // Get nearby groups for the user
         let nearbyGroups: GroupNearbyResponse[] = [];
         try {
@@ -90,7 +127,7 @@ export function registerLocationSocketHandlers(io: Server): void {
           nearbyGroups = [];
         }
 
-        socket.emit('location:users', enrichedUsers);
+        socket.emit('location:users', { users: enrichedUsers, friends: enrichedFriends });
         socket.emit('location:groups', nearbyGroups);
       } catch (error) {
         console.error('Location socket interval error:', error);

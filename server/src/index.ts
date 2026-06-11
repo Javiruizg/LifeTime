@@ -5,6 +5,7 @@ import { setupSocket } from './websocket/socket';
 import { registerLocationSocketHandlers } from './features/location/location.socket';
 import { registerChatSocketHandlers } from './features/chat/chat.socket';
 import { registerGroupSocketHandlers } from './features/group/group.socket';
+import { registerFriendsSocketHandlers } from './features/friends/friends.socket';
 import { prisma } from './shared/lib/prisma';
 import redis from './shared/lib/redis';
 
@@ -31,6 +32,7 @@ async function main() {
   registerLocationSocketHandlers(io);
   registerChatSocketHandlers(io);
   registerGroupSocketHandlers(io);
+  registerFriendsSocketHandlers(io);
 
   httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running at http://0.0.0.0:${PORT}`);

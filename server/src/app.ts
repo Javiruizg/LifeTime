@@ -7,6 +7,7 @@ import profileRouter from './features/profile/profile.routes';
 import locationRouter from './features/location/location.routes';
 import chatRouter from './features/chat/chat.routes';
 import groupRouter from './features/group/group.routes';
+import friendsRouter from './features/friends/friends.routes';
 
 const app = express();
 
@@ -34,6 +35,7 @@ app.use('/api/profile', profileRouter);
 app.use('/api/location', locationRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/group', groupRouter);
+app.use('/api/friends', friendsRouter);
 
 // Error handler global
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

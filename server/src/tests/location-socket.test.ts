@@ -10,12 +10,14 @@ jest.mock('../shared/lib/redis', () => ({
   __esModule: true,
   default: {
     exists: jest.fn(),
+    hgetall: jest.fn(),
   },
 }));
 
 jest.mock('../features/location/location.engine', () => ({
   updateUserLocation: jest.fn(),
   findVisibleUsersFor: jest.fn(),
+  findConnectedFriendsFor: jest.fn(),
 }));
 
 jest.mock('../shared/lib/prisma', () => ({
@@ -134,6 +136,7 @@ describe('Location Socket Handlers', () => {
       const socket = await simulateConnection(1);
 
       mockRedis.exists.mockResolvedValue(1);
+      mockRedis.hgetall.mockResolvedValue({ lat: '37.38', lng: '-5.99' });
       mockEngine.findVisibleUsersFor.mockResolvedValue([
         { userId: '2', latitude: 37.38, longitude: -5.99, distance: 100 },
       ]);
@@ -147,22 +150,27 @@ describe('Location Socket Handlers', () => {
 
       await intervalCallback!();
 
-      expect(socket.emit).toHaveBeenCalledWith('location:users', [
-        {
-          userId: 2,
-          latitude: 37.38,
-          longitude: -5.99,
-          distance: 100,
-          profile: { id: 20, userId: 2, name: 'Bob', imageUrl: null },
-          hasUnread: true,
-        },
-      ]);
+      expect(socket.emit).toHaveBeenCalledWith('location:users', {
+        users: [
+          {
+            userId: 2,
+            latitude: 37.38,
+            longitude: -5.99,
+            distance: 100,
+            profile: { id: 20, userId: 2, name: 'Bob', imageUrl: null },
+            hasUnread: true,
+          },
+        ],
+        friends: [],
+      });
+      expect(socket.emit).toHaveBeenCalledWith('location:groups', []);
     });
 
     it('should fallback to null profile when DB is unavailable', async () => {
       const socket = await simulateConnection(1);
 
       mockRedis.exists.mockResolvedValue(1);
+      mockRedis.hgetall.mockResolvedValue({ lat: '37.38', lng: '-5.99' });
       mockEngine.findVisibleUsersFor.mockResolvedValue([
         { userId: '2', latitude: 37.38, longitude: -5.99, distance: 100 },
       ]);
@@ -170,16 +178,20 @@ describe('Location Socket Handlers', () => {
 
       await intervalCallback!();
 
-      expect(socket.emit).toHaveBeenCalledWith('location:users', [
-        {
-          userId: 2,
-          latitude: 37.38,
-          longitude: -5.99,
-          distance: 100,
-          profile: null,
-          hasUnread: false,
-        },
-      ]);
+      expect(socket.emit).toHaveBeenCalledWith('location:users', {
+        users: [
+          {
+            userId: 2,
+            latitude: 37.38,
+            longitude: -5.99,
+            distance: 100,
+            profile: null,
+            hasUnread: false,
+          },
+        ],
+        friends: [],
+      });
+      expect(socket.emit).toHaveBeenCalledWith('location:groups', []);
     });
   });
 

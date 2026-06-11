@@ -51,6 +51,14 @@ export interface SessionExpiredPayload {
 /*  Group payload types                                               */
 /* ------------------------------------------------------------------ */
 
+export interface ConnectedFriendPayload {
+  userId: number;
+  latitude: number;
+  longitude: number;
+  profile: VisibleUserProfile | null;
+  hasUnread: boolean;
+}
+
 export interface NearbyGroup {
   chatId: number;
   name: string;
@@ -59,4 +67,9 @@ export interface NearbyGroup {
   imageUrl: string | null;
   membersCount: number;
   hasUnread: boolean;
+}
+
+export interface LocationUsersPayload {
+  users: VisibleUserPayload[];
+  friends: ConnectedFriendPayload[];
 }

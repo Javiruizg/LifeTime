@@ -7,6 +7,7 @@ import HomeScreen from '../screens/HomeScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import ConnectedMapScreen from '../screens/ConnectedMapScreen';
 import ChatScreen from '../screens/ChatScreen';
+import SocialScreen from '../screens/SocialScreen';
 import { getAccessToken } from '../features/auth/auth.service';
 import { theme } from '../shared/lib/theme';
 
@@ -22,6 +23,7 @@ export type RootStackParamList = {
     otherUserImageUrl?: string | null;
     isGroup?: boolean;
   };
+  Social: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -122,6 +124,7 @@ export default function AppNavigator() {
             <Stack.Screen key="Home" name="Home" component={HomeScreen} />,
             <Stack.Screen key="ConnectedMap" name="ConnectedMap" component={ConnectedMapScreen} />,
             <Stack.Screen key="Chat" name="Chat" component={ChatScreen} />,
+            <Stack.Screen key="Social" name="Social" component={SocialScreen} />,
             <Stack.Screen
               key="Profile"
               name="Profile"
