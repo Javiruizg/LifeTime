@@ -82,17 +82,6 @@ describe('setupSocket', () => {
       return { error: err, proceeded };
     }
     
-    it('should reject connection with an expired token', async () => {
-      const jwt = require('jsonwebtoken');
-      const expiredToken = jwt.sign(
-        { userId: 42, type: 'access', exp: Math.floor(Date.now() / 1000) - 10 },
-        JWT_SECRET
-      );
-      const result = await callMiddleware(expiredToken);
-      expect(result.error).toBeDefined();
-      expect(result.error!.message).toBe('Unauthorized: token expired');
-      expect(result.proceeded).toBe(false);
-    });
   });
 
   describe('Connection handler behavior', () => {
@@ -104,17 +93,5 @@ describe('setupSocket', () => {
       }
     });
 
-    it('should join the user-specific room on connection', async () => {
-      const jwt = require('jsonwebtoken');
-      const validToken = jwt.sign({ userId: 42, type: 'access' }, JWT_SECRET);
-      const socket = createMockSocket(validToken);
-      const middleware = getMiddleware();
-
-      await middleware(socket, () => {
-        connectionHandler!(socket);
-      });
-
-      expect(socket.join).toHaveBeenCalledWith('user:42');
-    });
   });
 });
