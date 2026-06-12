@@ -14,6 +14,7 @@ jest.mock('../shared/lib/redis', () => ({
     hgetall: jest.fn(),
     georadius: jest.fn(),
     zrem: jest.fn(),
+    pipeline: jest.fn(),
   },
 }));
 
@@ -29,8 +30,16 @@ const mockRedis = redis as jest.Mocked<typeof redis>;
 const mockPrisma = prisma as any;
 
 describe('Location Engine', () => {
+  let mockPipelineObj: { hgetall: jest.Mock; zrem: jest.Mock; exec: jest.Mock };
+
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
+    mockPipelineObj = {
+      hgetall: jest.fn().mockReturnThis(),
+      zrem: jest.fn().mockReturnThis(),
+      exec: jest.fn(),
+    };
+    mockRedis.pipeline.mockReturnValue(mockPipelineObj as never);
   });
 
   describe('updateUserLocation', () => {
@@ -74,14 +83,15 @@ describe('Location Engine', () => {
     });
 
     it('should return visible users within mutual range', async () => {
-      mockRedis.hgetall
-        .mockResolvedValueOnce({ lat: '37.38', lng: '-5.99', range: '1000' } as never)
-        .mockResolvedValueOnce({ lat: '37.381', lng: '-5.991', range: '1000' } as never);
+      mockRedis.hgetall.mockResolvedValue({ lat: '37.38', lng: '-5.99', range: '1000' } as never);
 
       mockRedis.georadius.mockResolvedValue([
         ['42', '0'],
         ['99', '500'],
       ] as never);
+      mockPipelineObj.exec.mockResolvedValue([
+        [null, { lat: '37.381', lng: '-5.991', range: '1000' }],
+      ]);
 
       const result = await findVisibleUsersFor(42);
 
@@ -104,11 +114,12 @@ describe('Location Engine', () => {
     });
 
     it('should skip users outside their own range (mutual check)', async () => {
-      mockRedis.hgetall
-        .mockResolvedValueOnce({ lat: '37.38', lng: '-5.99', range: '2000' } as never)
-        .mockResolvedValueOnce({ lat: '37.39', lng: '-6.00', range: '100' } as never);
+      mockRedis.hgetall.mockResolvedValue({ lat: '37.38', lng: '-5.99', range: '2000' } as never);
 
       mockRedis.georadius.mockResolvedValue([['99', '500']] as never);
+      mockPipelineObj.exec.mockResolvedValue([
+        [null, { lat: '37.39', lng: '-6.00', range: '100' }],
+      ]);
 
       const result = await findVisibleUsersFor(42);
 
@@ -116,17 +127,19 @@ describe('Location Engine', () => {
     });
 
     it('should perform lazy cleanup of stale geo entries', async () => {
-      mockRedis.hgetall
-        .mockResolvedValueOnce({ lat: '37.38', lng: '-5.99', range: '1000' } as never)
-        .mockResolvedValueOnce({} as never);
+      mockRedis.hgetall.mockResolvedValue({ lat: '37.38', lng: '-5.99', range: '1000' } as never);
 
       mockRedis.georadius.mockResolvedValue([['99', '500']] as never);
-      mockRedis.zrem.mockResolvedValue(1 as never);
+      mockPipelineObj.exec
+        .mockResolvedValueOnce([
+          [null, {}],
+        ])
+        .mockResolvedValueOnce([]);
 
       const result = await findVisibleUsersFor(42);
 
       expect(result).toEqual([]);
-      expect(mockRedis.zrem).toHaveBeenCalledWith('geo:connected_users', '99');
+      expect(mockPipelineObj.zrem).toHaveBeenCalledWith('geo:connected_users', '99');
     });
 
     it('should skip entries with NaN distance', async () => {
@@ -139,11 +152,12 @@ describe('Location Engine', () => {
     });
 
     it('should default NaN lat/lng to 0 for other users', async () => {
-      mockRedis.hgetall
-        .mockResolvedValueOnce({ lat: '37.38', lng: '-5.99', range: '1000' } as never)
-        .mockResolvedValueOnce({ lat: 'bad', lng: 'bad', range: '1000' } as never);
+      mockRedis.hgetall.mockResolvedValue({ lat: '37.38', lng: '-5.99', range: '1000' } as never);
 
       mockRedis.georadius.mockResolvedValue([['99', '500']] as never);
+      mockPipelineObj.exec.mockResolvedValue([
+        [null, { lat: 'bad', lng: 'bad', range: '1000' }],
+      ]);
 
       const result = await findVisibleUsersFor(42);
 

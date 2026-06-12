@@ -411,7 +411,7 @@ describe('Group Service', () => {
           latitude: 40.4168,
           longitude: -3.7038,
           profile: { name: 'Group A', imageUrl: null },
-          chat: { members: [{ userId: 1 }, { userId: 2 }, { userId: 3 }] },
+          chat: { _count: { members: 3 } },
         },
       ]);
       mockPrisma.message.findMany.mockResolvedValue([]); // no unread
@@ -437,14 +437,14 @@ describe('Group Service', () => {
           latitude: 40.4168,
           longitude: -3.7038,
           profile: { name: 'Group nearby', imageUrl: null },
-          chat: { members: [{ userId: 1 }] },
+          chat: { _count: { members: 1 } },
         },
         {
           chatId: 2,
           latitude: 41.0,
           longitude: -4.0,
           profile: { name: 'Group far', imageUrl: null },
-          chat: { members: [{ userId: 2 }] },
+          chat: { _count: { members: 1 } },
         },
       ]);
       mockPrisma.message.findMany.mockResolvedValue([]);
@@ -462,7 +462,7 @@ describe('Group Service', () => {
           latitude: 40.4168,
           longitude: -3.7038,
           profile: { name: 'Group', imageUrl: '/img.png' },
-          chat: { members: [{ userId: 1 }] },
+          chat: { _count: { members: 1 } },
         },
       ]);
       mockPrisma.message.findMany.mockResolvedValue([{ chatId: 1 }]);
