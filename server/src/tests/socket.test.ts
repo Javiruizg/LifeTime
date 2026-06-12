@@ -60,9 +60,6 @@ describe('setupSocket', () => {
     mockHttpServer = { on: jest.fn() } as unknown as Partial<HttpServer>;
   });
 
-  describe('Server initialization', () => {
-  });
-
   describe('Auth middleware behavior', () => {
     beforeEach(() => {
       setupSocket(mockHttpServer as HttpServer);
