@@ -47,14 +47,25 @@ export async function findCliqueForUser(userId: number): Promise<number[] | null
     return null;
   }
 
-  // 6. Verify mutual visibility: every pair must see each other
-  // For each candidate, check that ALL other pool members are in their visible set
+  // 6. Verify mutual visibility with memoization to avoid redundant Redis calls
+  // when the same user appears as a visible member across multiple iterations
+  const visibleCache = new Map<number, Set<string>>();
+
+  const getVisibleIds = async (memberId: number): Promise<Set<string>> => {
+    if (visibleCache.has(memberId)) {
+      return visibleCache.get(memberId)!;
+    }
+    const visible = await findVisibleUsersFor(memberId);
+    const ids = new Set(visible.map((u) => u.userId));
+    visibleCache.set(memberId, ids);
+    return ids;
+  };
+
   const cliqueUserIds: number[] = [];
 
   for (const member of pool) {
     const memberId = parseInt(member.userId, 10);
-    const memberVisible = await findVisibleUsersFor(memberId);
-    const memberVisibleIds = new Set(memberVisible.map((u) => u.userId));
+    const memberVisibleIds = await getVisibleIds(memberId);
 
     // Check that every OTHER pool member is visible from this member
     let allVisible = true;

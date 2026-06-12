@@ -281,19 +281,27 @@ export async function getNearbyGroups(
   const minLng = lng - lngDelta;
   const maxLng = lng + lngDelta;
 
-  // 2. Fetch candidate groups within bounding box (filter in DB)
+  // 2. Fetch candidate groups within bounding box — only select needed fields
   const candidateGroups = await prisma.groupChat.findMany({
     where: {
       latitude: { gte: minLat, lte: maxLat },
       longitude: { gte: minLng, lte: maxLng },
     },
-    include: {
+    select: {
+      chatId: true,
+      latitude: true,
+      longitude: true,
       chat: {
-        include: {
-          members: true,
+        select: {
+          _count: { select: { members: true } },
         },
       },
-      profile: true,
+      profile: {
+        select: {
+          name: true,
+          imageUrl: true,
+        },
+      },
     },
     take: 50,
   });
@@ -326,7 +334,7 @@ export async function getNearbyGroups(
     latitude: group.latitude,
     longitude: group.longitude,
     imageUrl: group.profile.imageUrl,
-    membersCount: group.chat.members.length,
+    membersCount: group.chat._count.members,
     hasUnread: unreadMap.get(group.chatId) || false,
   }));
 }
