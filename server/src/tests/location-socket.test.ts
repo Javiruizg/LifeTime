@@ -23,13 +23,13 @@ jest.mock('../features/location/location.engine', () => ({
 jest.mock('../shared/lib/prisma', () => ({
   prisma: {
     profile: {
-      findUnique: jest.fn(),
+      findMany: jest.fn(),
     },
   },
 }));
 
 jest.mock('../features/chat/chat.service', () => ({
-  hasUnreadFromUser: jest.fn(),
+  hasUnreadFromMultipleUsers: jest.fn(),
 }));
 
 const mockRedis = redis as any;
@@ -140,13 +140,18 @@ describe('Location Socket Handlers', () => {
       mockEngine.findVisibleUsersFor.mockResolvedValue([
         { userId: '2', latitude: 37.38, longitude: -5.99, distance: 100 },
       ]);
-      mockPrisma.profile.findUnique.mockResolvedValue({
-        id: 20,
-        userId: 2,
-        name: 'Bob',
-        imageUrl: null,
-      });
-      mockChatService.hasUnreadFromUser.mockResolvedValue(true);
+      mockPrisma.profile.findMany.mockResolvedValue([
+        {
+          id: 20,
+          userId: 2,
+          name: 'Bob',
+          message: '',
+          imageUrl: null,
+        },
+      ]);
+      mockChatService.hasUnreadFromMultipleUsers.mockResolvedValue(
+        new Map([[2, true]])
+      );
 
       await intervalCallback!();
 
@@ -157,7 +162,7 @@ describe('Location Socket Handlers', () => {
             latitude: 37.38,
             longitude: -5.99,
             distance: 100,
-            profile: { id: 20, userId: 2, name: 'Bob', imageUrl: null },
+            profile: { id: 20, userId: 2, name: 'Bob', message: '', imageUrl: null },
             hasUnread: true,
           },
         ],
@@ -174,7 +179,7 @@ describe('Location Socket Handlers', () => {
       mockEngine.findVisibleUsersFor.mockResolvedValue([
         { userId: '2', latitude: 37.38, longitude: -5.99, distance: 100 },
       ]);
-      mockPrisma.profile.findUnique.mockRejectedValue(new Error('DB down'));
+      mockPrisma.profile.findMany.mockRejectedValue(new Error('DB down'));
 
       await intervalCallback!();
 

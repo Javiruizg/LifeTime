@@ -317,3 +317,66 @@ export async function getOtherMemberIdsInChat(
 
   return members.map((m) => m.userId);
 }
+
+/**
+ * Batch check unread status for multiple users.
+ * Returns a Map where key = otherUserId, value = hasUnread boolean.
+ * This replaces the N+1 queries of calling hasUnreadFromUser in a loop.
+ */
+export async function hasUnreadFromMultipleUsers(
+  currentUserId: number,
+  otherUserIds: number[]
+): Promise<Map<number, boolean>> {
+  if (otherUserIds.length === 0) {
+    return new Map();
+  }
+
+  // Find all private chats where currentUserId is a member
+  const chats = await prisma.chat.findMany({
+    where: {
+      privateChat: { isNot: null },
+      members: {
+        some: { userId: currentUserId },
+      },
+    },
+    include: {
+      members: { select: { userId: true } },
+    },
+  });
+
+  // Map: chatId -> otherUserId
+  const chatToUser = new Map<number, number>();
+  for (const chat of chats) {
+    const otherMember = chat.members.find((m) => m.userId !== currentUserId);
+    if (otherMember && otherUserIds.includes(otherMember.userId)) {
+      chatToUser.set(chat.id, otherMember.userId);
+    }
+  }
+
+  // Batch check unread for all relevant chats
+  const relevantChatIds = Array.from(chatToUser.keys());
+  const unreadMessages = await prisma.message.findMany({
+    where: {
+      chatId: { in: relevantChatIds },
+      senderId: { not: currentUserId },
+      seen: false,
+    },
+    select: { chatId: true },
+    distinct: ['chatId'],
+  });
+
+  const unreadChatIds = new Set(unreadMessages.map((m) => m.chatId));
+  const result = new Map<number, boolean>();
+  for (const [chatId, userId] of chatToUser) {
+    result.set(userId, unreadChatIds.has(chatId));
+  }
+
+  // Fill missing users with false
+  for (const uid of otherUserIds) {
+    if (!result.has(uid)) {
+      result.set(uid, false);
+    }
+  }
+
+  return result;
+}

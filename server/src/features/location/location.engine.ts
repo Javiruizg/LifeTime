@@ -16,6 +16,11 @@ export async function updateUserLocation(
   lat: number,
   lng: number
 ): Promise<void> {
+  // Defensive validation
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    throw new Error('Invalid coordinates: out of valid range');
+  }
+
   const key = `${SESSION_KEY_PREFIX}:${userId}`;
   await redis.hset(key, 'lat', String(lat), 'lng', String(lng));
   await redis.geoadd(GEO_KEY, lng, lat, String(userId));
