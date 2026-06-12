@@ -181,6 +181,109 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
   useEffect(() => {
     isActiveRef.current = true;
 
+    const handleLocationUsers = (payload: LocationUsersPayload) => {
+      if (!isActiveRef.current) return;
+
+      const { users: serverUsers, friends: serverFriends } = payload;
+
+      setOtherUsers((prevLocalUsers) => {
+        const visibleUsers = serverUsers.map((serverUser) => {
+          const localUser = prevLocalUsers.find((u) => u.userId === serverUser.userId);
+          return {
+            ...serverUser,
+            hasUnread: serverUser.hasUnread || (localUser?.hasUnread ?? false),
+            isFriend: false,
+          };
+        });
+
+        const friendUsers = serverFriends.map((serverFriend) => {
+          const localUser = prevLocalUsers.find((u) => u.userId === serverFriend.userId);
+          return {
+            userId: serverFriend.userId,
+            latitude: serverFriend.latitude,
+            longitude: serverFriend.longitude,
+            distance: 0,
+            profile: serverFriend.profile,
+            hasUnread: serverFriend.hasUnread || (localUser?.hasUnread ?? false),
+            isFriend: true,
+          };
+        });
+
+        const merged = [...visibleUsers];
+        friendUsers.forEach((friend) => {
+          const existingIndex = merged.findIndex((u) => u.userId === friend.userId);
+          if (existingIndex !== -1) {
+            merged[existingIndex] = friend;
+          } else {
+            merged.push(friend);
+          }
+        });
+
+        return merged;
+      });
+
+      if (!hasUsersRef.current) {
+        hasUsersRef.current = true;
+        maybeHideSpinner();
+      }
+    };
+
+    const handleSessionExpiredEvent = () => {
+      if (!isActiveRef.current) return;
+      handleSessionExpired();
+    };
+
+    const handleLocationGroups = (groups: NearbyGroup[]) => {
+      if (!isActiveRef.current) return;
+      setNearbyGroups((prevLocalGroups) => {
+        return groups.map((serverGroup) => {
+          const localGroup = prevLocalGroups.find((g) => g.chatId === serverGroup.chatId);
+          return {
+            ...serverGroup,
+            hasUnread: serverGroup.hasUnread || (localGroup?.hasUnread ?? false),
+          };
+        });
+      });
+    };
+
+    const handleGroupCreated = (payload: { chatId: number; name: string; latitude: number; longitude: number; imageUrl: string | null; members: number[] }) => {
+      if (!isActiveRef.current) return;
+      setNearbyGroups((prev) => {
+        if (prev.some((g) => g.chatId === payload.chatId)) return prev;
+        return [...prev, {
+          chatId: payload.chatId,
+          name: payload.name,
+          latitude: payload.latitude,
+          longitude: payload.longitude,
+          imageUrl: payload.imageUrl,
+          membersCount: payload.members.length,
+          hasUnread: false,
+        }];
+      });
+    };
+
+    const handleGroupDeleted = (payload: { chatId: number }) => {
+      if (!isActiveRef.current) return;
+      setNearbyGroups((prev) => {
+        const filtered = prev.filter((g) => g.chatId !== payload.chatId);
+        return filtered;
+      });
+    };
+
+    const registerListeners = () => {
+      const sock = getSocket();
+      if (!sock) return;
+      sock.off('location:users', handleLocationUsers);
+      sock.on('location:users', handleLocationUsers);
+      sock.off('location:session_expired', handleSessionExpiredEvent);
+      sock.on('location:session_expired', handleSessionExpiredEvent);
+      sock.off('location:groups', handleLocationGroups);
+      sock.on('location:groups', handleLocationGroups);
+      sock.off('group:created', handleGroupCreated);
+      sock.on('group:created', handleGroupCreated);
+      sock.off('group:deleted', handleGroupDeleted);
+      sock.on('group:deleted', handleGroupDeleted);
+    };
 
     const initialize = async () => {
       setIsInitializing(true);
@@ -269,104 +372,9 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
           });
         }
 
-        // 6. Listen for visible users and friends
-        getSocket()?.on('location:users', (payload: LocationUsersPayload) => {
-          if (!isActiveRef.current) return;
-
-          const { users: serverUsers, friends: serverFriends } = payload;
-
-          setOtherUsers((prevLocalUsers) => {
-            // Process visible users
-            const visibleUsers = serverUsers.map((serverUser) => {
-              const localUser = prevLocalUsers.find((u) => u.userId === serverUser.userId);
-              return {
-                ...serverUser,
-                hasUnread: serverUser.hasUnread || (localUser?.hasUnread ?? false),
-                isFriend: false,
-              };
-            });
-
-            // Process connected friends
-            const friendUsers = serverFriends.map((serverFriend) => {
-              const localUser = prevLocalUsers.find((u) => u.userId === serverFriend.userId);
-              return {
-                userId: serverFriend.userId,
-                latitude: serverFriend.latitude,
-                longitude: serverFriend.longitude,
-                distance: 0,
-                profile: serverFriend.profile,
-                hasUnread: serverFriend.hasUnread || (localUser?.hasUnread ?? false),
-                isFriend: true,
-              };
-            });
-
-            // Merge: if a friend is also in visible users, keep the friend version
-            const merged = [...visibleUsers];
-            friendUsers.forEach((friend) => {
-              const existingIndex = merged.findIndex((u) => u.userId === friend.userId);
-              if (existingIndex !== -1) {
-                merged[existingIndex] = friend;
-              } else {
-                merged.push(friend);
-              }
-            });
-
-            return merged;
-          });
-
-          if (!hasUsersRef.current) {
-            hasUsersRef.current = true;
-            maybeHideSpinner();
-          }
-        });
-
-        // 7. Listen for session expiry
-        getSocket()?.on('location:session_expired', () => {
-          if (!isActiveRef.current) return;
-          handleSessionExpired();
-        });
-
-        // 8. Listen for nearby groups
-        getSocket()?.on('location:groups', (groups: NearbyGroup[]) => {
-          if (!isActiveRef.current) return;
-          setNearbyGroups((prevLocalGroups) => {
-            return groups.map((serverGroup) => {
-              const localGroup = prevLocalGroups.find((g) => g.chatId === serverGroup.chatId);
-              return {
-                ...serverGroup,
-                hasUnread: serverGroup.hasUnread || (localGroup?.hasUnread ?? false),
-              };
-            });
-          });
-        });
-
-        // 9. Listen for group created events
-        getSocket()?.on('group:created', (payload: { chatId: number; name: string; latitude: number; longitude: number; imageUrl: string | null; members: number[] }) => {
-          if (!isActiveRef.current) return;
-          setNearbyGroups((prev) => {
-            if (prev.some((g) => g.chatId === payload.chatId)) return prev;
-            return [...prev, {
-              chatId: payload.chatId,
-              name: payload.name,
-              latitude: payload.latitude,
-              longitude: payload.longitude,
-              imageUrl: payload.imageUrl,
-              membersCount: payload.members.length,
-              hasUnread: false,
-            }];
-          });
-        });
-
-        // 10. Listen for group deleted events
-        getSocket()?.on('group:deleted', (payload: { chatId: number }) => {
-          console.log(`[map] Received group:deleted for chatId=${payload.chatId}`);
-          if (!isActiveRef.current) return;
-          setNearbyGroups((prev) => {
-            const filtered = prev.filter((g) => g.chatId !== payload.chatId);
-            console.log(`[map] Removed group ${payload.chatId}, groups left:`, filtered.length);
-            return filtered;
-          });
-        });
+        // 6-10. Register socket listeners (with reconnect safety)
+        registerListeners();
+        getSocket()?.on('connect', registerListeners);
 
       } catch (err) {
         if (isActiveRef.current) {
@@ -380,11 +388,15 @@ export default function ConnectedMapScreen({ navigation }: ConnectedMapScreenPro
 
     return () => {
       isActiveRef.current = false;
-      getSocket()?.off('location:users');
-      getSocket()?.off('location:session_expired');
-      getSocket()?.off('location:groups');
-      getSocket()?.off('group:created');
-      getSocket()?.off('group:deleted');
+      const sock = getSocket();
+      if (sock) {
+        sock.off('connect', registerListeners);
+        sock.off('location:users', handleLocationUsers);
+        sock.off('location:session_expired', handleSessionExpiredEvent);
+        sock.off('location:groups', handleLocationGroups);
+        sock.off('group:created', handleGroupCreated);
+        sock.off('group:deleted', handleGroupDeleted);
+      }
       stopSharing();
     };
   }, [navigation, handleSessionExpired, maybeHideSpinner]);

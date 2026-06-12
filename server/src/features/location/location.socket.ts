@@ -1,18 +1,19 @@
 import { Server } from 'socket.io';
 import { z } from 'zod';
 import redis from '../../shared/lib/redis';
+import { checkWsRateLimit } from '../../shared/middleware/rateLimit';
 import { updateUserLocation, findVisibleUsersFor, findConnectedFriendsFor } from './location.engine';
 import { disconnectUserLocation } from './location.service';
 import { prisma } from '../../shared/lib/prisma';
-import { hasUnreadFromUser } from '../chat/chat.service';
+import { hasUnreadFromMultipleUsers } from '../chat/chat.service';
 import { onUserConnected, getNearbyGroups } from '../group/group.service';
 import type { GroupNearbyResponse } from '../group/group.types';
 
 const SESSION_KEY_PREFIX = 'location:session';
 
 const locationUpdateSchema = z.object({
-  latitude: z.number(),
-  longitude: z.number(),
+  latitude: z.number().min(-90, 'Latitude must be >= -90').max(90, 'Latitude must be <= 90'),
+  longitude: z.number().min(-180, 'Longitude must be >= -180').max(180, 'Longitude must be <= 180'),
 });
 
 interface EnrichedFriend {
@@ -27,6 +28,19 @@ interface EnrichedFriend {
     imageUrl: string | null;
   } | null;
   hasUnread: boolean;
+}
+
+/** Batch fetch all profiles for a list of userIds in a single query. */
+async function getProfilesForUsers(
+  userIds: number[]
+): Promise<Map<number, { id: number; userId: number | null; name: string; message: string; imageUrl: string | null }>> {
+  if (userIds.length === 0) {
+    return new Map();
+  }
+  const profiles = await prisma.profile.findMany({
+    where: { userId: { in: userIds } },
+  });
+  return new Map(profiles.map((p) => [p.userId!, p]));
 }
 
 export function registerLocationSocketHandlers(io: Server): void {
@@ -57,28 +71,23 @@ export function registerLocationSocketHandlers(io: Server): void {
 
         const visibleUsers = await findVisibleUsersFor(userId);
 
-        // Enrich with Prisma Profile data
+        // Enrich with Prisma Profile data (batch queries to avoid N+1)
         let enrichedUsers;
         try {
-          enrichedUsers = await Promise.all(
-            visibleUsers.map(async (user) => {
-              const profile = await prisma.profile.findUnique({
-                where: { userId: parseInt(user.userId, 10) },
-              });
-              const hasUnread = await hasUnreadFromUser(
-                userId,
-                parseInt(user.userId, 10)
-              );
-              return {
-                userId: parseInt(user.userId, 10),
-                latitude: user.latitude,
-                longitude: user.longitude,
-                distance: user.distance,
-                profile: profile || null,
-                hasUnread,
-              };
-            })
-          );
+          const userIds = visibleUsers.map((u) => parseInt(u.userId, 10));
+          const [profilesMap, unreadMap] = await Promise.all([
+            getProfilesForUsers(userIds),
+            hasUnreadFromMultipleUsers(userId, userIds),
+          ]);
+
+          enrichedUsers = visibleUsers.map((user) => ({
+            userId: parseInt(user.userId, 10),
+            latitude: user.latitude,
+            longitude: user.longitude,
+            distance: user.distance,
+            profile: profilesMap.get(parseInt(user.userId, 10)) || null,
+            hasUnread: unreadMap.get(parseInt(user.userId, 10)) || false,
+          }));
         } catch {
           // If DB is unavailable, return raw visible users without profile enrichment
           enrichedUsers = visibleUsers.map((user) => ({
@@ -91,25 +100,24 @@ export function registerLocationSocketHandlers(io: Server): void {
           }));
         }
 
-        // Get connected friends for the user
+        // Get connected friends for the user (batch queries to avoid N+1)
         let enrichedFriends: EnrichedFriend[];
         try {
           const connectedFriends = await findConnectedFriendsFor(userId);
-          enrichedFriends = await Promise.all(
-            connectedFriends.map(async (friend) => {
-              const profile = await prisma.profile.findUnique({
-                where: { userId: friend.userId },
-              });
-              const hasUnread = await hasUnreadFromUser(userId, friend.userId);
-              return {
-                userId: friend.userId,
-                latitude: friend.latitude,
-                longitude: friend.longitude,
-                profile: profile || null,
-                hasUnread,
-              };
-            })
-          );
+          const friendIds = connectedFriends.map((f) => f.userId);
+
+          const [friendProfiles, friendUnread] = await Promise.all([
+            getProfilesForUsers(friendIds),
+            hasUnreadFromMultipleUsers(userId, friendIds),
+          ]);
+
+          enrichedFriends = connectedFriends.map((friend) => ({
+            userId: friend.userId,
+            latitude: friend.latitude,
+            longitude: friend.longitude,
+            profile: friendProfiles.get(friend.userId) || null,
+            hasUnread: friendUnread.get(friend.userId) || false,
+          }));
         } catch {
           enrichedFriends = [];
         }
@@ -137,6 +145,12 @@ export function registerLocationSocketHandlers(io: Server): void {
     // Handle incoming location updates from client
     socket.on('location:update', async (payload) => {
       try {
+        // Rate limiting
+        if (!(await checkWsRateLimit('locationUpdate', userId))) {
+          socket.emit('location:error', { error: 'Rate limit exceeded' });
+          return;
+        }
+
         const parsed = locationUpdateSchema.safeParse(payload);
         if (!parsed.success) {
           console.warn('Invalid location:update payload:', parsed.error);

@@ -1,9 +1,22 @@
 import { registerChatSocketHandlers } from '../features/chat/chat.socket';
 import * as chatService from '../features/chat/chat.service';
+import { prisma } from '../shared/lib/prisma';
 
 jest.mock('../features/chat/chat.service');
+jest.mock('../shared/middleware/rateLimit', () => ({
+  checkWsRateLimit: jest.fn().mockResolvedValue(true),
+  checkWsConnectionRateLimit: jest.fn().mockResolvedValue(true),
+}));
+jest.mock('../shared/lib/prisma', () => ({
+  prisma: {
+    chatMember: {
+      findUnique: jest.fn(),
+    },
+  },
+}));
 
 const mockService = chatService as jest.Mocked<typeof chatService>;
+const mockPrisma = prisma as any;
 
 interface MockSocket {
   id: string;
@@ -57,40 +70,64 @@ describe('Chat Socket Handlers', () => {
   }
 
   describe('chat:join', () => {
-    it('should join the chat room on valid payload', () => {
+    it('should join the chat room when user is a member', async () => {
       const socket = simulateConnection(1);
       const handler = socketHandlers.get('chat:join');
+      mockPrisma.chatMember.findUnique.mockResolvedValue({ userId: 1, chatId: 5 });
 
-      handler!({ chatId: 5 });
+      await handler!({ chatId: 5 });
 
       expect(socket.join).toHaveBeenCalledWith('chat:5');
     });
 
-    it('should ignore invalid payload', () => {
+    it('should reject join when user is not a member', async () => {
+      const socket = simulateConnection(1);
+      const handler = socketHandlers.get('chat:join');
+      mockPrisma.chatMember.findUnique.mockResolvedValue(null);
+
+      await handler!({ chatId: 5 });
+
+      expect(socket.join).not.toHaveBeenCalled();
+      expect(socket.emit).toHaveBeenCalledWith('chat:error', { error: 'Not a member of this chat' });
+    });
+
+    it('should ignore invalid payload', async () => {
       const socket = simulateConnection(1);
       const handler = socketHandlers.get('chat:join');
 
-      handler!({ chatId: 'invalid' });
+      await handler!({ chatId: 'invalid' });
 
       expect(socket.join).not.toHaveBeenCalled();
     });
   });
 
   describe('chat:leave', () => {
-    it('should leave the chat room on valid payload', () => {
+    it('should leave the chat room when user is a member', async () => {
       const socket = simulateConnection(1);
       const handler = socketHandlers.get('chat:leave');
+      mockPrisma.chatMember.findUnique.mockResolvedValue({ userId: 1, chatId: 5 });
 
-      handler!({ chatId: 5 });
+      await handler!({ chatId: 5 });
 
       expect(socket.leave).toHaveBeenCalledWith('chat:5');
     });
 
-    it('should ignore invalid payload', () => {
+    it('should reject leave when user is not a member', async () => {
+      const socket = simulateConnection(1);
+      const handler = socketHandlers.get('chat:leave');
+      mockPrisma.chatMember.findUnique.mockResolvedValue(null);
+
+      await handler!({ chatId: 5 });
+
+      expect(socket.leave).not.toHaveBeenCalled();
+      expect(socket.emit).toHaveBeenCalledWith('chat:error', { error: 'Not a member of this chat' });
+    });
+
+    it('should ignore invalid payload', async () => {
       const socket = simulateConnection(1);
       const handler = socketHandlers.get('chat:leave');
 
-      handler!({});
+      await handler!({});
 
       expect(socket.leave).not.toHaveBeenCalled();
     });

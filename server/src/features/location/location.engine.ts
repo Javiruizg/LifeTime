@@ -16,6 +16,11 @@ export async function updateUserLocation(
   lat: number,
   lng: number
 ): Promise<void> {
+  // Defensive validation
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    throw new Error('Invalid coordinates: out of valid range');
+  }
+
   const key = `${SESSION_KEY_PREFIX}:${userId}`;
   await redis.hset(key, 'lat', String(lat), 'lng', String(lng));
   await redis.geoadd(GEO_KEY, lng, lat, String(userId));
@@ -46,49 +51,65 @@ export async function findVisibleUsersFor(userId: number): Promise<VisibleUser[]
     'WITHDIST'
   ) as Array<[string, string]>;
 
-  const visibleUsers: VisibleUser[] = [];
+  // Batch all hgetall calls into a single pipeline round-trip
+  const pipelineEntries: Array<{ memberId: string; distance: number }> = [];
+  const hgetallPipeline = redis.pipeline();
 
   for (const entry of radiusResults) {
     const memberId = entry[0];
     const distanceStr = entry[1];
-
-    if (String(memberId) === String(userId)) {
-      continue;
-    }
-
     const distance = parseFloat(distanceStr as string);
-    if (Number.isNaN(distance)) {
+
+    if (String(memberId) === String(userId)) continue;
+    if (Number.isNaN(distance)) continue;
+
+    pipelineEntries.push({ memberId, distance });
+    hgetallPipeline.hgetall(`${SESSION_KEY_PREFIX}:${memberId}`);
+  }
+
+  const hgetallResults = await hgetallPipeline.exec();
+  if (!hgetallResults) return [];
+
+  const visibleUsers: VisibleUser[] = [];
+  const staleMembers: string[] = [];
+
+  for (let i = 0; i < pipelineEntries.length; i++) {
+    const { memberId, distance } = pipelineEntries[i];
+    const [err, theirSession] = hgetallResults[i];
+
+    if (err) continue;
+
+    // In ioredis, hgetall on a missing key returns {} (empty object)
+    const session = theirSession as Record<string, string>;
+    if (!session || Object.keys(session).length === 0) {
+      staleMembers.push(memberId);
       continue;
     }
 
-    const theirKey = `${SESSION_KEY_PREFIX}:${memberId}`;
-    const theirSession = await redis.hgetall(theirKey);
-
-    // Lazy cleanup: if their session is gone, remove stale geo entry
-    if (!theirSession || Object.keys(theirSession).length === 0) {
-      await redis.zrem(GEO_KEY, String(memberId));
-      continue;
-    }
-
-    const theirRange = parseFloat(theirSession.range);
-    if (Number.isNaN(theirRange)) {
-      continue;
-    }
+    const theirRange = parseFloat(session.range);
+    if (Number.isNaN(theirRange)) continue;
 
     // Mutual range check: they must be within their own range too
-    if (distance > theirRange) {
-      continue;
-    }
+    if (distance > theirRange) continue;
 
-    const theirLat = parseFloat(theirSession.lat);
-    const theirLng = parseFloat(theirSession.lng);
+    const theirLat = parseFloat(session.lat);
+    const theirLng = parseFloat(session.lng);
 
     visibleUsers.push({
-      userId: String(memberId),
+      userId: memberId,
       latitude: Number.isNaN(theirLat) ? 0 : theirLat,
       longitude: Number.isNaN(theirLng) ? 0 : theirLng,
       distance,
     });
+  }
+
+  // Batch cleanup of stale geo entries
+  if (staleMembers.length > 0) {
+    const cleanupPipeline = redis.pipeline();
+    for (const memberId of staleMembers) {
+      cleanupPipeline.zrem(GEO_KEY, memberId);
+    }
+    await cleanupPipeline.exec();
   }
 
   return visibleUsers;

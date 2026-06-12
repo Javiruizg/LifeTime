@@ -1,5 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import { z } from 'zod';
+import { checkWsRateLimit } from '../../shared/middleware/rateLimit';
+import { prisma } from '../../shared/lib/prisma';
 import {
   createMessage,
   markMessagesAsSeen,
@@ -24,26 +26,54 @@ export function registerChatSocketHandlers(io: Server): void {
   io.on('connection', (socket) => {
     const userId = socket.data.userId as number;
 
-    socket.on('chat:join', (payload) => {
+    socket.on('chat:join', async (payload) => {
+      if (!(await checkWsRateLimit('chatJoinLeave', userId))) {
+        socket.emit('chat:error', { error: 'Rate limit exceeded' });
+        return;
+      }
       const parsed = joinLeaveSchema.safeParse(payload);
       if (!parsed.success) {
         console.warn('Invalid chat:join payload:', parsed.error);
         return;
       }
-      socket.join(`chat:${parsed.data.chatId}`);
+      const { chatId } = parsed.data;
+      const membership = await prisma.chatMember.findUnique({
+        where: { userId_chatId: { userId, chatId } },
+      });
+      if (!membership) {
+        socket.emit('chat:error', { error: 'Not a member of this chat' });
+        return;
+      }
+      socket.join(`chat:${chatId}`);
     });
 
-    socket.on('chat:leave', (payload) => {
+    socket.on('chat:leave', async (payload) => {
+      if (!(await checkWsRateLimit('chatJoinLeave', userId))) {
+        socket.emit('chat:error', { error: 'Rate limit exceeded' });
+        return;
+      }
       const parsed = joinLeaveSchema.safeParse(payload);
       if (!parsed.success) {
         console.warn('Invalid chat:leave payload:', parsed.error);
         return;
       }
-      socket.leave(`chat:${parsed.data.chatId}`);
+      const { chatId } = parsed.data;
+      const membership = await prisma.chatMember.findUnique({
+        where: { userId_chatId: { userId, chatId } },
+      });
+      if (!membership) {
+        socket.emit('chat:error', { error: 'Not a member of this chat' });
+        return;
+      }
+      socket.leave(`chat:${chatId}`);
     });
 
     socket.on('chat:send', async (payload) => {
       try {
+        if (!(await checkWsRateLimit('chatSend', userId))) {
+          socket.emit('chat:error', { error: 'Rate limit exceeded' });
+          return;
+        }
         const parsed = sendMessageSchema.safeParse(payload);
         if (!parsed.success) {
           console.warn('Invalid chat:send payload:', parsed.error);
