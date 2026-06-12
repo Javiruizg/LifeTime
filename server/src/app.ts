@@ -1,6 +1,7 @@
 import express, { type Request, type Response, type NextFunction } from 'express';
 import helmet from 'helmet';
 import path from 'path';
+import { apiRateLimiter } from './shared/middleware/rateLimit';
 import authRouter from './features/auth/auth.routes';
 import uploadRouter from './features/upload/upload.routes';
 import profileRouter from './features/profile/profile.routes';
@@ -27,6 +28,9 @@ app.use('/defaults', express.static(path.resolve('public/defaults')));
 app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// API rate limiting
+app.use('/api', apiRateLimiter);
 
 // API routes
 app.use('/api/auth', authRouter);

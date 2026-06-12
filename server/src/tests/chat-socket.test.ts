@@ -57,40 +57,40 @@ describe('Chat Socket Handlers', () => {
   }
 
   describe('chat:join', () => {
-    it('should join the chat room on valid payload', () => {
+    it('should join the chat room on valid payload', async () => {
       const socket = simulateConnection(1);
       const handler = socketHandlers.get('chat:join');
 
-      handler!({ chatId: 5 });
+      await handler!({ chatId: 5 });
 
       expect(socket.join).toHaveBeenCalledWith('chat:5');
     });
 
-    it('should ignore invalid payload', () => {
+    it('should ignore invalid payload', async () => {
       const socket = simulateConnection(1);
       const handler = socketHandlers.get('chat:join');
 
-      handler!({ chatId: 'invalid' });
+      await handler!({ chatId: 'invalid' });
 
       expect(socket.join).not.toHaveBeenCalled();
     });
   });
 
   describe('chat:leave', () => {
-    it('should leave the chat room on valid payload', () => {
+    it('should leave the chat room on valid payload', async () => {
       const socket = simulateConnection(1);
       const handler = socketHandlers.get('chat:leave');
 
-      handler!({ chatId: 5 });
+      await handler!({ chatId: 5 });
 
       expect(socket.leave).toHaveBeenCalledWith('chat:5');
     });
 
-    it('should ignore invalid payload', () => {
+    it('should ignore invalid payload', async () => {
       const socket = simulateConnection(1);
       const handler = socketHandlers.get('chat:leave');
 
-      handler!({});
+      await handler!({});
 
       expect(socket.leave).not.toHaveBeenCalled();
     });

@@ -7,7 +7,7 @@ import type { SocketData } from '../shared/types/auth';
 const JWT_SECRET = process.env.JWT_SECRET!;
 
 type MockNextFn = (err?: Error) => void;
-type MockMiddlewareFn = (socket: MockSocket, next: MockNextFn) => void;
+type MockMiddlewareFn = (socket: MockSocket, next: MockNextFn) => void | Promise<void>;
 
 interface MockSocket {
   id: string;
@@ -68,13 +68,13 @@ describe('setupSocket', () => {
       setupSocket(mockHttpServer as HttpServer);
     });
 
-    function callMiddleware(token?: string): { error?: Error; proceeded?: boolean } {
+    async function callMiddleware(token?: string): Promise<{ error?: Error; proceeded?: boolean }> {
       const middleware = getMiddleware();
       const socket = createMockSocket(token);
       let err: Error | undefined;
       let proceeded = false;
 
-      middleware(socket, (cbErr?: Error) => {
+      await middleware(socket, (cbErr?: Error) => {
         err = cbErr;
         proceeded = !cbErr;
       });
@@ -82,38 +82,38 @@ describe('setupSocket', () => {
       return { error: err, proceeded };
     }
 
-    it('should reject connection with missing token', () => {
-      const result = callMiddleware();
+    it('should reject connection with missing token', async () => {
+      const result = await callMiddleware();
       expect(result.error).toBeDefined();
       expect(result.error!.message).toBe('Unauthorized: missing token');
       expect(result.proceeded).toBe(false);
     });
 
-    it('should allow connection with a valid access token and attach userId to socket.data', () => {
+    it('should allow connection with a valid access token and attach userId to socket.data', async () => {
       const jwt = require('jsonwebtoken');
       const validToken = jwt.sign({ userId: 99, type: 'access' }, JWT_SECRET);
       const socket = createMockSocket(validToken);
       const middleware = getMiddleware();
 
-      middleware(socket, () => {});
+      await middleware(socket, () => {});
 
       expect(socket.data.userId).toBe(99);
     });
 
-    it('should reject connection with an expired token', () => {
+    it('should reject connection with an expired token', async () => {
       const jwt = require('jsonwebtoken');
       const expiredToken = jwt.sign(
         { userId: 42, type: 'access', exp: Math.floor(Date.now() / 1000) - 10 },
         JWT_SECRET
       );
-      const result = callMiddleware(expiredToken);
+      const result = await callMiddleware(expiredToken);
       expect(result.error).toBeDefined();
       expect(result.error!.message).toBe('Unauthorized: token expired');
       expect(result.proceeded).toBe(false);
     });
 
-    it('should reject connection with a malformed token', () => {
-      const result = callMiddleware('not-a-valid-jwt');
+    it('should reject connection with a malformed token', async () => {
+      const result = await callMiddleware('not-a-valid-jwt');
       expect(result.error).toBeDefined();
       expect(result.error!.message).toBe('Unauthorized: invalid or malformed token');
       expect(result.proceeded).toBe(false);
@@ -129,13 +129,13 @@ describe('setupSocket', () => {
       }
     });
 
-    it('should join the user-specific room on connection', () => {
+    it('should join the user-specific room on connection', async () => {
       const jwt = require('jsonwebtoken');
       const validToken = jwt.sign({ userId: 42, type: 'access' }, JWT_SECRET);
       const socket = createMockSocket(validToken);
       const middleware = getMiddleware();
 
-      middleware(socket, () => {
+      await middleware(socket, () => {
         connectionHandler!(socket);
       });
 

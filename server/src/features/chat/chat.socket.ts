@@ -1,5 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import { z } from 'zod';
+import { checkWsRateLimit } from '../../shared/middleware/rateLimit';
 import {
   createMessage,
   markMessagesAsSeen,
@@ -24,7 +25,11 @@ export function registerChatSocketHandlers(io: Server): void {
   io.on('connection', (socket) => {
     const userId = socket.data.userId as number;
 
-    socket.on('chat:join', (payload) => {
+    socket.on('chat:join', async (payload) => {
+      if (!(await checkWsRateLimit('chatJoinLeave', userId))) {
+        socket.emit('chat:error', { error: 'Rate limit exceeded' });
+        return;
+      }
       const parsed = joinLeaveSchema.safeParse(payload);
       if (!parsed.success) {
         console.warn('Invalid chat:join payload:', parsed.error);
@@ -33,7 +38,11 @@ export function registerChatSocketHandlers(io: Server): void {
       socket.join(`chat:${parsed.data.chatId}`);
     });
 
-    socket.on('chat:leave', (payload) => {
+    socket.on('chat:leave', async (payload) => {
+      if (!(await checkWsRateLimit('chatJoinLeave', userId))) {
+        socket.emit('chat:error', { error: 'Rate limit exceeded' });
+        return;
+      }
       const parsed = joinLeaveSchema.safeParse(payload);
       if (!parsed.success) {
         console.warn('Invalid chat:leave payload:', parsed.error);
@@ -44,6 +53,10 @@ export function registerChatSocketHandlers(io: Server): void {
 
     socket.on('chat:send', async (payload) => {
       try {
+        if (!(await checkWsRateLimit('chatSend', userId))) {
+          socket.emit('chat:error', { error: 'Rate limit exceeded' });
+          return;
+        }
         const parsed = sendMessageSchema.safeParse(payload);
         if (!parsed.success) {
           console.warn('Invalid chat:send payload:', parsed.error);

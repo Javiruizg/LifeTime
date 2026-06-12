@@ -2,6 +2,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import type { Server as HttpServer } from 'http';
 import { verifyAccessToken, TokenError } from '../shared/lib/jwt';
 import type { SocketData } from '../shared/types/auth';
+import { checkWsConnectionRateLimit } from '../shared/middleware/rateLimit';
 
 const SOCKET_AUTH_ERROR = 'Unauthorized: missing token';
 
@@ -13,11 +14,37 @@ export function setupSocket(httpServer: HttpServer): SocketIOServer {
     pingInterval: 25000,
     connectTimeout: 45000,
     transports: ['websocket'],
+    maxHttpBufferSize: 1e6, // 1MB max payload
+    perMessageDeflate: {
+      threshold: 1024,
+      zlibDeflateOptions: {
+        chunkSize: 8 * 1024,
+        memLevel: 7,
+        level: 3,
+      },
+      zlibInflateOptions: {
+        chunkSize: 8 * 1024,
+      },
+      clientNoContextTakeover: true,
+      serverNoContextTakeover: true,
+      serverMaxWindowBits: 10,
+      concurrencyLimit: 10,
+    },
   });
 
   ioInstance = io;
 
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
+    // Rate limit connections per IP
+    const clientIp = (socket.handshake?.headers?.['x-forwarded-for'] as string | undefined)
+      || socket.handshake?.address;
+    const ip = clientIp?.split(',')[0]?.trim() || 'unknown';
+
+    const allowed = await checkWsConnectionRateLimit(ip);
+    if (!allowed) {
+      return next(new Error('Rate limit exceeded: too many connections'));
+    }
+
     const token = socket.handshake.auth?.token as string | undefined;
 
     if (!token) {

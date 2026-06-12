@@ -1,6 +1,7 @@
 import { Server } from 'socket.io';
 import { z } from 'zod';
 import redis from '../../shared/lib/redis';
+import { checkWsRateLimit } from '../../shared/middleware/rateLimit';
 import { updateUserLocation, findVisibleUsersFor, findConnectedFriendsFor } from './location.engine';
 import { disconnectUserLocation } from './location.service';
 import { prisma } from '../../shared/lib/prisma';
@@ -137,6 +138,12 @@ export function registerLocationSocketHandlers(io: Server): void {
     // Handle incoming location updates from client
     socket.on('location:update', async (payload) => {
       try {
+        // Rate limiting
+        if (!(await checkWsRateLimit('locationUpdate', userId))) {
+          socket.emit('location:error', { error: 'Rate limit exceeded' });
+          return;
+        }
+
         const parsed = locationUpdateSchema.safeParse(payload);
         if (!parsed.success) {
           console.warn('Invalid location:update payload:', parsed.error);
