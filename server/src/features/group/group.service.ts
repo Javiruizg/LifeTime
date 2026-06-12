@@ -264,6 +264,7 @@ export async function deleteGroup(chatId: number): Promise<void> {
 
 /**
  * Find nearby groups from a given location.
+ * Uses a bounding-box filter in PostgreSQL first, then exact Haversine distance.
  */
 export async function getNearbyGroups(
   lat: number,
@@ -271,8 +272,21 @@ export async function getNearbyGroups(
   radius: number,
   userId: number
 ): Promise<GroupNearbyResponse[]> {
-  // Fetch all active groups with their profiles and members
-  const groups = await prisma.groupChat.findMany({
+  // 1. Approximate bounding box (1 degree lat ≈ 111km)
+  const latDelta = radius / 111000;
+  const lngDelta = radius / (111000 * Math.cos((lat * Math.PI) / 180));
+
+  const minLat = lat - latDelta;
+  const maxLat = lat + latDelta;
+  const minLng = lng - lngDelta;
+  const maxLng = lng + lngDelta;
+
+  // 2. Fetch candidate groups within bounding box (filter in DB)
+  const candidateGroups = await prisma.groupChat.findMany({
+    where: {
+      latitude: { gte: minLat, lte: maxLat },
+      longitude: { gte: minLng, lte: maxLng },
+    },
     include: {
       chat: {
         include: {
@@ -281,34 +295,40 @@ export async function getNearbyGroups(
       },
       profile: true,
     },
+    take: 50,
   });
 
-  const nearby: GroupNearbyResponse[] = [];
+  // 3. Filter by exact distance and collect nearby chatIds
+  const nearbyCandidates: Array<{
+    group: typeof candidateGroups[0];
+    distance: number;
+  }> = [];
 
-  for (const group of groups) {
+  for (const group of candidateGroups) {
     const distance = getDistanceFromLatLngInM(
       lat,
       lng,
       group.latitude,
       group.longitude
     );
-
     if (distance <= radius) {
-      const hasUnread = await hasUnreadInGroup(group.chatId, userId);
-
-      nearby.push({
-        chatId: group.chatId,
-        name: group.profile.name,
-        latitude: group.latitude,
-        longitude: group.longitude,
-        imageUrl: group.profile.imageUrl,
-        membersCount: group.chat.members.length,
-        hasUnread,
-      });
+      nearbyCandidates.push({ group, distance });
     }
   }
 
-  return nearby;
+  // 4. Batch check unread for all nearby groups (avoid N+1)
+  const nearbyChatIds = nearbyCandidates.map((c) => c.group.chatId);
+  const unreadMap = await hasUnreadInGroups(nearbyChatIds, userId);
+
+  return nearbyCandidates.map(({ group }) => ({
+    chatId: group.chatId,
+    name: group.profile.name,
+    latitude: group.latitude,
+    longitude: group.longitude,
+    imageUrl: group.profile.imageUrl,
+    membersCount: group.chat.members.length,
+    hasUnread: unreadMap.get(group.chatId) || false,
+  }));
 }
 
 /**
@@ -325,6 +345,32 @@ async function hasUnreadInGroup(chatId: number, userId: number): Promise<boolean
   });
 
   return !!unread;
+}
+
+/**
+ * Batch check unread status for multiple groups.
+ * Returns a Map where key = chatId, value = hasUnread boolean.
+ */
+async function hasUnreadInGroups(
+  chatIds: number[],
+  userId: number
+): Promise<Map<number, boolean>> {
+  if (chatIds.length === 0) {
+    return new Map();
+  }
+
+  const unreadMessages = await prisma.message.findMany({
+    where: {
+      chatId: { in: chatIds },
+      senderId: { not: userId },
+      seen: false,
+    },
+    select: { chatId: true },
+    distinct: ['chatId'],
+  });
+
+  const unreadChatIds = new Set(unreadMessages.map((m) => m.chatId));
+  return new Map(chatIds.map((id) => [id, unreadChatIds.has(id)]));
 }
 
 /**

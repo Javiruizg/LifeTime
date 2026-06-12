@@ -30,7 +30,7 @@ jest.mock('../shared/lib/prisma', () => ({
     chat: { delete: jest.fn() },
     groupChat: { findUnique: jest.fn(), findMany: jest.fn() },
     chatMember: { deleteMany: jest.fn(), findUnique: jest.fn(), create: jest.fn() },
-    message: { findFirst: jest.fn() },
+    message: { findFirst: jest.fn(), findMany: jest.fn() },
   },
 }));
 
@@ -414,7 +414,7 @@ describe('Group Service', () => {
           chat: { members: [{ userId: 1 }, { userId: 2 }, { userId: 3 }] },
         },
       ]);
-      mockPrisma.message.findFirst.mockResolvedValue(null); // no unread
+      mockPrisma.message.findMany.mockResolvedValue([]); // no unread
 
       const result = await getNearbyGroups(40.4168, -3.7038, 2000, 99);
 
@@ -447,7 +447,7 @@ describe('Group Service', () => {
           chat: { members: [{ userId: 2 }] },
         },
       ]);
-      mockPrisma.message.findFirst.mockResolvedValue(null);
+      mockPrisma.message.findMany.mockResolvedValue([]);
 
       const result = await getNearbyGroups(40.4168, -3.7038, 2000, 99);
 
@@ -465,7 +465,7 @@ describe('Group Service', () => {
           chat: { members: [{ userId: 1 }] },
         },
       ]);
-      mockPrisma.message.findFirst.mockResolvedValue({ id: 42 });
+      mockPrisma.message.findMany.mockResolvedValue([{ chatId: 1 }]);
 
       const result = await getNearbyGroups(40.4168, -3.7038, 2000, 99);
 
