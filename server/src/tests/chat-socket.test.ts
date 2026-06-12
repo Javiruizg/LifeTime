@@ -3,6 +3,10 @@ import * as chatService from '../features/chat/chat.service';
 import { prisma } from '../shared/lib/prisma';
 
 jest.mock('../features/chat/chat.service');
+jest.mock('../shared/middleware/rateLimit', () => ({
+  checkWsRateLimit: jest.fn().mockResolvedValue(true),
+  checkWsConnectionRateLimit: jest.fn().mockResolvedValue(true),
+}));
 jest.mock('../shared/lib/prisma', () => ({
   prisma: {
     chatMember: {
