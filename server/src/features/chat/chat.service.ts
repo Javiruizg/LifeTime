@@ -41,28 +41,29 @@ export async function getOrCreatePrivateChat(
   currentUserId: number,
   otherUserId: number
 ): Promise<PrivateChatResponse> {
-  // Find existing private chat where both users are members
-  const existingChat = await prisma.chat.findFirst({
-    where: {
-      privateChat: { isNot: null },
-      members: {
-        every: {
-          userId: { in: [currentUserId, otherUserId] },
-        },
+  const findChat = () =>
+    prisma.chat.findFirst({
+      where: {
+        privateChat: { isNot: null },
+        AND: [
+          { members: { some: { userId: currentUserId } } },
+          { members: { some: { userId: otherUserId } } },
+        ],
       },
-    },
-    include: {
-      members: {
-        include: {
-          user: {
-            include: {
-              profile: true,
+      include: {
+        members: {
+          include: {
+            user: {
+              include: {
+                profile: true,
+              },
             },
           },
         },
       },
-    },
-  });
+    });
+
+  const existingChat = await findChat();
 
   if (existingChat) {
     const otherMember = existingChat.members.find((m: { userId: number }) => m.userId !== currentUserId);
@@ -263,11 +264,10 @@ export async function hasUnreadFromUser(
   const chat = await prisma.chat.findFirst({
     where: {
       privateChat: { isNot: null },
-      members: {
-        every: {
-          userId: { in: [currentUserId, otherUserId] },
-        },
-      },
+      AND: [
+        { members: { some: { userId: currentUserId } } },
+        { members: { some: { userId: otherUserId } } },
+      ],
     },
     select: { id: true },
   });

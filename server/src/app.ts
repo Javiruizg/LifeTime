@@ -14,8 +14,13 @@ const app = express();
 
 // Global middlewares
 app.use(helmet());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+// Rate limiting MUST be before body parsers to prevent DoS via large payloads
+app.use('/api', apiRateLimiter);
+
+// Body parsers with strict limits
+app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 
 // Serve static files from the uploads directory
 const uploadsDir = process.env.UPLOADS_DIR ?? 'uploads';
@@ -28,9 +33,6 @@ app.use('/defaults', express.static(path.resolve('public/defaults')));
 app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
-
-// API rate limiting
-app.use('/api', apiRateLimiter);
 
 // API routes
 app.use('/api/auth', authRouter);
