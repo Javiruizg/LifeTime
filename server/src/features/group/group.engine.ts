@@ -18,7 +18,7 @@ export async function findCliqueForUser(userId: number): Promise<number[] | null
   }
 
   // 2. Get visible users for the given user
-  const visibleUsers = await findVisibleUsersFor(userId);
+  const { visibleUsers } = await findVisibleUsersFor(userId);
 
   // 3. Filter candidates: only those without a group assigned
   const candidates: VisibleUser[] = [];
@@ -55,7 +55,7 @@ export async function findCliqueForUser(userId: number): Promise<number[] | null
     if (visibleCache.has(memberId)) {
       return visibleCache.get(memberId)!;
     }
-    const visible = await findVisibleUsersFor(memberId);
+    const { visibleUsers: visible } = await findVisibleUsersFor(memberId);
     const ids = new Set(visible.map((u) => u.userId));
     visibleCache.set(memberId, ids);
     return ids;

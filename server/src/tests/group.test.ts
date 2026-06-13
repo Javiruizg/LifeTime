@@ -42,7 +42,7 @@ describe('Group Engine', () => {
 
     it('should return null if no visible users', async () => {
       mockRedis.scard.mockResolvedValue(0 as never);
-      mockFindVisibleUsersFor.mockResolvedValue([]);
+      mockFindVisibleUsersFor.mockResolvedValue({ visibleUsers: [], staleMemberIds: [] });
       mockRedis.hgetall.mockResolvedValue({ lat: '40.4168', lng: '-3.7038', range: '2000' });
 
       const result = await findCliqueForUser(1);
@@ -52,9 +52,10 @@ describe('Group Engine', () => {
 
     it('should return null if only 1 visible user and 2 total', async () => {
       mockRedis.scard.mockResolvedValue(0 as never);
-      mockFindVisibleUsersFor.mockResolvedValue([
-        { userId: '2', latitude: 40.4170, longitude: -3.7040, distance: 100 },
-      ]);
+      mockFindVisibleUsersFor.mockResolvedValue({
+        visibleUsers: [{ userId: '2', latitude: 40.4170, longitude: -3.7040, distance: 100 }],
+        staleMemberIds: [],
+      });
       mockRedis.hgetall.mockResolvedValue({ lat: '40.4168', lng: '-3.7038', range: '2000' });
 
       const result = await findCliqueForUser(1);
@@ -65,25 +66,37 @@ describe('Group Engine', () => {
     it('should return clique of 3 if all mutually visible', async () => {
       mockRedis.scard.mockResolvedValue(0 as never);
       // First call: user 1 sees user 2 and 3 (initial check)
-      mockFindVisibleUsersFor.mockResolvedValueOnce([
-        { userId: '2', latitude: 40.4170, longitude: -3.7040, distance: 100 },
-        { userId: '3', latitude: 40.4165, longitude: -3.7025, distance: 150 },
-      ]);
+      mockFindVisibleUsersFor.mockResolvedValueOnce({
+        visibleUsers: [
+          { userId: '2', latitude: 40.4170, longitude: -3.7040, distance: 100 },
+          { userId: '3', latitude: 40.4165, longitude: -3.7025, distance: 150 },
+        ],
+        staleMemberIds: [],
+      });
       // Then when checking visibility from user 1 (self): sees 2 and 3
-      mockFindVisibleUsersFor.mockResolvedValueOnce([
-        { userId: '2', latitude: 40.4170, longitude: -3.7040, distance: 100 },
-        { userId: '3', latitude: 40.4165, longitude: -3.7025, distance: 150 },
-      ]);
+      mockFindVisibleUsersFor.mockResolvedValueOnce({
+        visibleUsers: [
+          { userId: '2', latitude: 40.4170, longitude: -3.7040, distance: 100 },
+          { userId: '3', latitude: 40.4165, longitude: -3.7025, distance: 150 },
+        ],
+        staleMemberIds: [],
+      });
       // Then when checking visibility from user 2: sees 1 and 3
-      mockFindVisibleUsersFor.mockResolvedValueOnce([
-        { userId: '1', latitude: 40.4168, longitude: -3.7038, distance: 100 },
-        { userId: '3', latitude: 40.4165, longitude: -3.7025, distance: 200 },
-      ]);
+      mockFindVisibleUsersFor.mockResolvedValueOnce({
+        visibleUsers: [
+          { userId: '1', latitude: 40.4168, longitude: -3.7038, distance: 100 },
+          { userId: '3', latitude: 40.4165, longitude: -3.7025, distance: 200 },
+        ],
+        staleMemberIds: [],
+      });
       // Then when checking visibility from user 3: sees 1 and 2
-      mockFindVisibleUsersFor.mockResolvedValueOnce([
-        { userId: '1', latitude: 40.4168, longitude: -3.7038, distance: 150 },
-        { userId: '2', latitude: 40.4170, longitude: -3.7040, distance: 200 },
-      ]);
+      mockFindVisibleUsersFor.mockResolvedValueOnce({
+        visibleUsers: [
+          { userId: '1', latitude: 40.4168, longitude: -3.7038, distance: 150 },
+          { userId: '2', latitude: 40.4170, longitude: -3.7040, distance: 200 },
+        ],
+        staleMemberIds: [],
+      });
       mockRedis.hgetall.mockResolvedValue({ lat: '40.4168', lng: '-3.7038', range: '2000' });
 
       const result = await findCliqueForUser(1);
@@ -93,10 +106,13 @@ describe('Group Engine', () => {
 
     it('should return null if user has no location session', async () => {
       mockRedis.scard.mockResolvedValue(0 as never);
-      mockFindVisibleUsersFor.mockResolvedValue([
-        { userId: '2', latitude: 40.4170, longitude: -3.7040, distance: 100 },
-        { userId: '3', latitude: 40.4165, longitude: -3.7025, distance: 150 },
-      ]);
+      mockFindVisibleUsersFor.mockResolvedValue({
+        visibleUsers: [
+          { userId: '2', latitude: 40.4170, longitude: -3.7040, distance: 100 },
+          { userId: '3', latitude: 40.4165, longitude: -3.7025, distance: 150 },
+        ],
+        staleMemberIds: [],
+      });
       mockRedis.hgetall.mockResolvedValue({} as never); // empty session
 
       const result = await findCliqueForUser(1);
@@ -107,19 +123,26 @@ describe('Group Engine', () => {
     it('should return null if not all mutually visible', async () => {
       mockRedis.scard.mockResolvedValue(0 as never);
       // First call: user 1 sees user 2 and 3 (initial check)
-      mockFindVisibleUsersFor.mockResolvedValueOnce([
-        { userId: '2', latitude: 40.4170, longitude: -3.7040, distance: 100 },
-        { userId: '3', latitude: 40.4165, longitude: -3.7025, distance: 150 },
-      ]);
+      mockFindVisibleUsersFor.mockResolvedValueOnce({
+        visibleUsers: [
+          { userId: '2', latitude: 40.4170, longitude: -3.7040, distance: 100 },
+          { userId: '3', latitude: 40.4165, longitude: -3.7025, distance: 150 },
+        ],
+        staleMemberIds: [],
+      });
       // Then when checking visibility from user 1 (self): sees 2 and 3
-      mockFindVisibleUsersFor.mockResolvedValueOnce([
-        { userId: '2', latitude: 40.4170, longitude: -3.7040, distance: 100 },
-        { userId: '3', latitude: 40.4165, longitude: -3.7025, distance: 150 },
-      ]);
+      mockFindVisibleUsersFor.mockResolvedValueOnce({
+        visibleUsers: [
+          { userId: '2', latitude: 40.4170, longitude: -3.7040, distance: 100 },
+          { userId: '3', latitude: 40.4165, longitude: -3.7025, distance: 150 },
+        ],
+        staleMemberIds: [],
+      });
       // Then when checking visibility from user 2: only sees 1, NOT 3
-      mockFindVisibleUsersFor.mockResolvedValueOnce([
-        { userId: '1', latitude: 40.4168, longitude: -3.7038, distance: 100 },
-      ]);
+      mockFindVisibleUsersFor.mockResolvedValueOnce({
+        visibleUsers: [{ userId: '1', latitude: 40.4168, longitude: -3.7038, distance: 100 }],
+        staleMemberIds: [],
+      });
       mockRedis.hgetall.mockResolvedValue({ lat: '40.4168', lng: '-3.7038', range: '2000' });
 
       const result = await findCliqueForUser(1);

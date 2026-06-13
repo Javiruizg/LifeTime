@@ -124,7 +124,7 @@ describe('Location Socket Handlers', () => {
       const socket = await simulateConnection(1);
 
       mockRedis.exists.mockResolvedValue(0);
-      mockEngine.findVisibleUsersFor.mockResolvedValue([]);
+      mockEngine.findVisibleUsersFor.mockResolvedValue({ visibleUsers: [], staleMemberIds: [] });
 
       await intervalCallback!();
 
@@ -137,9 +137,10 @@ describe('Location Socket Handlers', () => {
 
       mockRedis.exists.mockResolvedValue(1);
       mockRedis.hgetall.mockResolvedValue({ lat: '37.38', lng: '-5.99' });
-      mockEngine.findVisibleUsersFor.mockResolvedValue([
-        { userId: '2', latitude: 37.38, longitude: -5.99, distance: 100 },
-      ]);
+      mockEngine.findVisibleUsersFor.mockResolvedValue({
+        visibleUsers: [{ userId: '2', latitude: 37.38, longitude: -5.99, distance: 100 }],
+        staleMemberIds: [],
+      });
       mockPrisma.profile.findMany.mockResolvedValue([
         {
           id: 20,
@@ -176,9 +177,10 @@ describe('Location Socket Handlers', () => {
 
       mockRedis.exists.mockResolvedValue(1);
       mockRedis.hgetall.mockResolvedValue({ lat: '37.38', lng: '-5.99' });
-      mockEngine.findVisibleUsersFor.mockResolvedValue([
-        { userId: '2', latitude: 37.38, longitude: -5.99, distance: 100 },
-      ]);
+      mockEngine.findVisibleUsersFor.mockResolvedValue({
+        visibleUsers: [{ userId: '2', latitude: 37.38, longitude: -5.99, distance: 100 }],
+        staleMemberIds: [],
+      });
       mockPrisma.profile.findMany.mockRejectedValue(new Error('DB down'));
 
       await intervalCallback!();

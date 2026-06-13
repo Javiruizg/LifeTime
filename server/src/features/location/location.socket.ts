@@ -6,7 +6,7 @@ import { updateUserLocation, findVisibleUsersFor, findConnectedFriendsFor } from
 import { disconnectUserLocation } from './location.service';
 import { prisma } from '../../shared/lib/prisma';
 import { hasUnreadFromMultipleUsers } from '../chat/chat.service';
-import { onUserConnected, getNearbyGroups } from '../group/group.service';
+import { onUserConnected, onUserDisconnected, getNearbyGroups } from '../group/group.service';
 import type { GroupNearbyResponse } from '../group/group.types';
 
 const SESSION_KEY_PREFIX = 'location:session';
@@ -69,7 +69,13 @@ export function registerLocationSocketHandlers(io: Server): void {
           return;
         }
 
-        const visibleUsers = await findVisibleUsersFor(userId);
+        const { visibleUsers, staleMemberIds } = await findVisibleUsersFor(userId);
+
+        // Fire-and-forget group cleanup for stale members (TTL expired
+        // while user was disconnected)
+        for (const staleId of staleMemberIds) {
+          onUserDisconnected(staleId).catch(() => {});
+        }
 
         // Enrich with Prisma Profile data (batch queries to avoid N+1)
         let enrichedUsers;
@@ -185,10 +191,19 @@ export function registerLocationSocketHandlers(io: Server): void {
     // Clean up interval on disconnect.
     // Immediate cleanup for group memberships is required so that groups
     // drop members correctly and auto-delete when under 3.
+    // Do NOT clean up location data on socket disconnect.
+    // The TTL set on connect governs when the session expires, so closing
+    // the tab keeps the user visible on the map for the full duration.
+    // Manual "Disconnect" button calls the REST API /location/disconnect
+    // which triggers disconnectUserLocation directly.
     socket.on('disconnect', () => {
       clearInterval(intervalId);
+    });
+
+    // Allow manual stop via WebSocket (cleaner than REST for some flows)
+    socket.on('location:stop', () => {
       disconnectUserLocation(userId).catch((err) => {
-        console.error('Error during disconnect cleanup:', err);
+        console.error('Error during location:stop cleanup:', err);
       });
     });
   });

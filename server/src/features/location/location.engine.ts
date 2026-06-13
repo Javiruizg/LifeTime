@@ -4,19 +4,11 @@ import { prisma } from '../../shared/lib/prisma';
 const SESSION_KEY_PREFIX = 'location:session';
 const GEO_KEY = 'geo:connected_users';
 
-export interface VisibleUser {
-  userId: string;
-  latitude: number;
-  longitude: number;
-  distance: number;
-}
-
 export async function updateUserLocation(
   userId: number,
   lat: number,
   lng: number
 ): Promise<void> {
-  // Defensive validation
   if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
     throw new Error('Invalid coordinates: out of valid range');
   }
@@ -26,12 +18,24 @@ export async function updateUserLocation(
   await redis.geoadd(GEO_KEY, lng, lat, String(userId));
 }
 
-export async function findVisibleUsersFor(userId: number): Promise<VisibleUser[]> {
+export interface VisibleUser {
+  userId: string;
+  latitude: number;
+  longitude: number;
+  distance: number;
+}
+
+export interface FindVisibleResult {
+  visibleUsers: VisibleUser[];
+  staleMemberIds: number[];
+}
+
+export async function findVisibleUsersFor(userId: number): Promise<FindVisibleResult> {
   const ownKey = `${SESSION_KEY_PREFIX}:${userId}`;
   const ownSession = await redis.hgetall(ownKey);
 
   if (!ownSession || Object.keys(ownSession).length === 0) {
-    return [];
+    return { visibleUsers: [], staleMemberIds: [] };
   }
 
   const ownLat = parseFloat(ownSession.lat);
@@ -39,7 +43,7 @@ export async function findVisibleUsersFor(userId: number): Promise<VisibleUser[]
   const ownRange = parseFloat(ownSession.range);
 
   if (Number.isNaN(ownLat) || Number.isNaN(ownLng) || Number.isNaN(ownRange)) {
-    return [];
+    return { visibleUsers: [], staleMemberIds: [] };
   }
 
   const radiusResults = await redis.georadius(
@@ -68,7 +72,7 @@ export async function findVisibleUsersFor(userId: number): Promise<VisibleUser[]
   }
 
   const hgetallResults = await hgetallPipeline.exec();
-  if (!hgetallResults) return [];
+  if (!hgetallResults) return { visibleUsers: [], staleMemberIds: [] };
 
   const visibleUsers: VisibleUser[] = [];
   const staleMembers: string[] = [];
@@ -103,7 +107,7 @@ export async function findVisibleUsersFor(userId: number): Promise<VisibleUser[]
     });
   }
 
-  // Batch cleanup of stale geo entries
+  // Batch cleanup of stale geo entries (group cleanup is handled by the caller)
   if (staleMembers.length > 0) {
     const cleanupPipeline = redis.pipeline();
     for (const memberId of staleMembers) {
@@ -112,7 +116,10 @@ export async function findVisibleUsersFor(userId: number): Promise<VisibleUser[]
     await cleanupPipeline.exec();
   }
 
-  return visibleUsers;
+  return {
+    visibleUsers,
+    staleMemberIds: staleMembers.map((id) => parseInt(id, 10)),
+  };
 }
 
 export interface ConnectedFriend {

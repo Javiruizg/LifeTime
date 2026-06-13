@@ -62,22 +62,22 @@ describe('Location Engine', () => {
   });
 
   describe('findVisibleUsersFor', () => {
-    it('should return empty array when own session does not exist', async () => {
+    it('should return empty visible users when own session does not exist', async () => {
       mockRedis.hgetall.mockResolvedValue({} as never);
 
-      const result = await findVisibleUsersFor(42);
+      const { visibleUsers: result } = await findVisibleUsersFor(42);
 
       expect(result).toEqual([]);
     });
 
-    it('should return empty array when own coordinates are NaN', async () => {
+    it('should return empty visible users when own coordinates are NaN', async () => {
       mockRedis.hgetall.mockResolvedValue({
         lat: 'not-a-number',
         lng: 'not-a-number',
         range: '1000',
       } as never);
 
-      const result = await findVisibleUsersFor(42);
+      const { visibleUsers: result } = await findVisibleUsersFor(42);
 
       expect(result).toEqual([]);
     });
@@ -93,7 +93,7 @@ describe('Location Engine', () => {
         [null, { lat: '37.381', lng: '-5.991', range: '1000' }],
       ]);
 
-      const result = await findVisibleUsersFor(42);
+      const { visibleUsers: result } = await findVisibleUsersFor(42);
 
       expect(result).toHaveLength(1);
       expect(result[0]).toMatchObject({
@@ -108,7 +108,7 @@ describe('Location Engine', () => {
       mockRedis.hgetall.mockResolvedValue({ lat: '37.38', lng: '-5.99', range: '1000' } as never);
       mockRedis.georadius.mockResolvedValue([['42', '0']] as never);
 
-      const result = await findVisibleUsersFor(42);
+      const { visibleUsers: result } = await findVisibleUsersFor(42);
 
       expect(result).toEqual([]);
     });
@@ -121,7 +121,7 @@ describe('Location Engine', () => {
         [null, { lat: '37.39', lng: '-6.00', range: '100' }],
       ]);
 
-      const result = await findVisibleUsersFor(42);
+      const { visibleUsers: result } = await findVisibleUsersFor(42);
 
       expect(result).toEqual([]);
     });
@@ -136,7 +136,7 @@ describe('Location Engine', () => {
         ])
         .mockResolvedValueOnce([]);
 
-      const result = await findVisibleUsersFor(42);
+      const { visibleUsers: result } = await findVisibleUsersFor(42);
 
       expect(result).toEqual([]);
       expect(mockPipelineObj.zrem).toHaveBeenCalledWith('geo:connected_users', '99');
@@ -146,7 +146,7 @@ describe('Location Engine', () => {
       mockRedis.hgetall.mockResolvedValue({ lat: '37.38', lng: '-5.99', range: '1000' } as never);
       mockRedis.georadius.mockResolvedValue([['99', 'not-a-number']] as never);
 
-      const result = await findVisibleUsersFor(42);
+      const { visibleUsers: result } = await findVisibleUsersFor(42);
 
       expect(result).toEqual([]);
     });
@@ -159,7 +159,7 @@ describe('Location Engine', () => {
         [null, { lat: 'bad', lng: 'bad', range: '1000' }],
       ]);
 
-      const result = await findVisibleUsersFor(42);
+      const { visibleUsers: result } = await findVisibleUsersFor(42);
 
       expect(result[0].latitude).toBe(0);
       expect(result[0].longitude).toBe(0);
