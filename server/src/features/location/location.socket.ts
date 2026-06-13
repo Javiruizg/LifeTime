@@ -57,7 +57,13 @@ export function registerLocationSocketHandlers(io: Server): void {
     }
 
     // Session exists: start periodic visibility updates (~7s)
+    let isRunning = false;
     const intervalId = setInterval(async () => {
+      if (isRunning) {
+        console.warn(`[location] Skipping tick for user ${userId} because previous tick is still running`);
+        return;
+      }
+      isRunning = true;
       try {
         // Re-read session. If gone (TTL expired):
         const stillExists = await redis.exists(sessionKey);
@@ -71,13 +77,13 @@ export function registerLocationSocketHandlers(io: Server): void {
 
         const { visibleUsers, staleMemberIds } = await findVisibleUsersFor(userId);
 
-        // Clean up stale members (TTL expired while user was disconnected)
+        // Clean up stale members in background so the tick isn't blocked
         for (const staleId of staleMemberIds) {
-          try {
-            await onUserDisconnected(staleId);
-          } catch (err) {
-            console.error(`[location] Failed to clean up stale user ${staleId}:`, err);
-          }
+          setTimeout(() => {
+            onUserDisconnected(staleId).catch((err) => {
+              console.error(`[location] Failed to clean up stale user ${staleId}:`, err);
+            });
+          }, 0);
         }
 
         // Enrich with Prisma Profile data (batch queries to avoid N+1)
@@ -151,6 +157,8 @@ export function registerLocationSocketHandlers(io: Server): void {
         socket.emit('location:groups', nearbyGroups);
       } catch (error) {
         console.error('Location socket interval error:', error);
+      } finally {
+        isRunning = false;
       }
     }, 7000);
 
