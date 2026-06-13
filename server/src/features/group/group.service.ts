@@ -60,6 +60,17 @@ export async function onUserConnected(userId: number): Promise<GroupCreatedPaylo
         // Orphaned flag: clean up Redis
         await redis.srem(`${USER_GROUPS_PREFIX}:${userId}`, String(chatId));
         await redis.srem(`${GROUP_MEMBERS_PREFIX}:${chatId}`, String(userId));
+
+        // Clean up orphaned chat from Prisma if no members remain in Redis
+        const remainingRedisMembers = await redis.smembers(`${GROUP_MEMBERS_PREFIX}:${chatId}`);
+        if (remainingRedisMembers.length === 0) {
+          try {
+            await prisma.chat.delete({ where: { id: chatId } });
+            console.log(`[onUserConnected] Cleaned up orphaned chat ${chatId}`);
+          } catch (err) {
+            console.error(`[onUserConnected] Failed to clean up orphaned chat ${chatId}:`, err);
+          }
+        }
       }
     }
     if (hasValidGroup) {
@@ -183,8 +194,8 @@ export async function createGroupFromClique(
     for (const uid of userIds) {
       io.to(`user:${uid}`).emit('group:created', result);
     }
-  } catch {
-    // Socket.IO not initialized (e.g., in tests)
+  } catch (err) {
+    console.error('[createGroupFromClique] Socket notification failed:', err);
   }
 
   return result;
@@ -207,8 +218,8 @@ export async function onUserDisconnected(userId: number): Promise<void> {
       await prisma.chatMember.deleteMany({
         where: { userId, chatId },
       });
-    } catch {
-      // Group may have already been deleted
+    } catch (err) {
+      console.error(`[onUserDisconnected] Failed to delete chatMember for user ${userId} in chat ${chatId}:`, err);
     }
 
     // Remove from Redis group members set
@@ -231,7 +242,6 @@ export async function onUserDisconnected(userId: number): Promise<void> {
  * Cascade from Chat deletes: GroupChat, Profile, ChatMembers, Messages.
  */
 export async function deleteGroup(chatId: number): Promise<void> {
-  // Clean up Redis: remove group references from all remaining members
   const membersKey = `${GROUP_MEMBERS_PREFIX}:${chatId}`;
   const remainingMembers = await redis.smembers(membersKey);
 
@@ -243,23 +253,26 @@ export async function deleteGroup(chatId: number): Promise<void> {
     for (const uid of remainingMembers) {
       io.to(`user:${uid}`).emit('group:deleted', { chatId, reason: 'underflow' });
     }
-  } catch {
-    // Socket.IO not initialized (e.g., in tests)
+  } catch (err) {
+    console.error(`[deleteGroup] Socket notification failed for ${chatId}:`, err);
   }
 
-  for (const uid of remainingMembers) {
-    await redis.srem(`${USER_GROUPS_PREFIX}:${uid}`, String(chatId));
-  }
-  await redis.del(membersKey);
-
+  // Delete from Prisma FIRST (atomic source of truth)
   try {
     await prisma.chat.delete({
       where: { id: chatId },
     });
   } catch (error) {
-    // If chat doesn't exist, it was already deleted
-    console.error(`Failed to delete group ${chatId}:`, error);
+    console.error(`[deleteGroup] Failed to delete group ${chatId} from Prisma:`, error);
+    // If Prisma fails, do NOT clean Redis so we can retry later
+    return;
   }
+
+  // Only clean Redis after Prisma succeeds
+  for (const uid of remainingMembers) {
+    await redis.srem(`${USER_GROUPS_PREFIX}:${uid}`, String(chatId));
+  }
+  await redis.del(membersKey);
 }
 
 /**
@@ -453,7 +466,7 @@ export async function joinGroup(chatId: number, userId: number): Promise<void> {
   try {
     const io = getIO();
     io.to(`chat:${chatId}`).emit('group:joined', { chatId, userId });
-  } catch {
-    // Socket.IO not initialized (e.g., in tests)
+  } catch (err) {
+    console.error('[joinGroup] Socket notification failed:', err);
   }
 }

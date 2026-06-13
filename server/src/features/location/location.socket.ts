@@ -71,10 +71,13 @@ export function registerLocationSocketHandlers(io: Server): void {
 
         const { visibleUsers, staleMemberIds } = await findVisibleUsersFor(userId);
 
-        // Fire-and-forget group cleanup for stale members (TTL expired
-        // while user was disconnected)
+        // Clean up stale members (TTL expired while user was disconnected)
         for (const staleId of staleMemberIds) {
-          onUserDisconnected(staleId).catch(() => {});
+          try {
+            await onUserDisconnected(staleId);
+          } catch (err) {
+            console.error(`[location] Failed to clean up stale user ${staleId}:`, err);
+          }
         }
 
         // Enrich with Prisma Profile data (batch queries to avoid N+1)
@@ -94,7 +97,8 @@ export function registerLocationSocketHandlers(io: Server): void {
             profile: profilesMap.get(parseInt(user.userId, 10)) || null,
             hasUnread: unreadMap.get(parseInt(user.userId, 10)) || false,
           }));
-        } catch {
+        } catch (err) {
+          console.error('[location] Profile enrichment failed:', err);
           // If DB is unavailable, return raw visible users without profile enrichment
           enrichedUsers = visibleUsers.map((user) => ({
             userId: parseInt(user.userId, 10),
@@ -124,7 +128,8 @@ export function registerLocationSocketHandlers(io: Server): void {
             profile: friendProfiles.get(friend.userId) || null,
             hasUnread: friendUnread.get(friend.userId) || false,
           }));
-        } catch {
+        } catch (err) {
+          console.error('[location] findConnectedFriendsFor failed:', err);
           enrichedFriends = [];
         }
 
@@ -137,7 +142,8 @@ export function registerLocationSocketHandlers(io: Server): void {
           if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
             nearbyGroups = await getNearbyGroups(lat, lng, 2000, userId);
           }
-        } catch {
+        } catch (err) {
+          console.error('[location] getNearbyGroups failed:', err);
           nearbyGroups = [];
         }
 
