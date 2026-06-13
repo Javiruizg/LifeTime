@@ -21,10 +21,10 @@ export const apiRateLimiter = rateLimit({
 export type WsEventType = 'connection' | 'chatSend' | 'locationUpdate' | 'chatJoinLeave';
 
 const WS_LIMITS: Record<WsEventType, { max: number; windowMs: number }> = {
-  connection: { max: 10, windowMs: 60000 },  // 10 conexiones / 60s
-  chatSend: { max: 30, windowMs: 60000 },   // 30 mensajes / minuto
+  connection: { max: 80, windowMs: 60000 },  // 80 conexiones / 60s
+  chatSend: { max: 60, windowMs: 60000 },   // 60 mensajes / minuto
   locationUpdate: { max: 60, windowMs: 60000 }, // 60 updates / minuto
-  chatJoinLeave: { max: 20, windowMs: 60000 },  // 20 join/leave / minuto
+  chatJoinLeave: { max: 30, windowMs: 60000 },  // 30 join/leave / minuto
 };
 
 /**
