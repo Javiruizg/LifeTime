@@ -181,9 +181,10 @@ describe('Location Engine', () => {
         { id: 2, userIdA: 100, userIdB: 42, createdAt: new Date() },
       ]);
 
-      mockRedis.hgetall
-        .mockResolvedValueOnce({ lat: '37.38', lng: '-5.99' } as never)
-        .mockResolvedValueOnce({ lat: '37.39', lng: '-6.00' } as never);
+      mockPipelineObj.exec.mockResolvedValue([
+        [null, { lat: '37.38', lng: '-5.99' }],
+        [null, { lat: '37.39', lng: '-6.00' }],
+      ]);
 
       const result = await findConnectedFriendsFor(42);
 
@@ -200,9 +201,10 @@ describe('Location Engine', () => {
         { id: 2, userIdA: 42, userIdB: 100, createdAt: new Date() },
       ]);
 
-      mockRedis.hgetall
-        .mockResolvedValueOnce({ lat: '37.38', lng: '-5.99' } as never)
-        .mockResolvedValueOnce({} as never);
+      mockPipelineObj.exec.mockResolvedValue([
+        [null, { lat: '37.38', lng: '-5.99' }],
+        [null, {}],
+      ]);
 
       const result = await findConnectedFriendsFor(42);
 
@@ -216,9 +218,10 @@ describe('Location Engine', () => {
         { id: 2, userIdA: 42, userIdB: 100, createdAt: new Date() },
       ]);
 
-      mockRedis.hgetall
-        .mockResolvedValueOnce({ lat: 'bad', lng: 'bad' } as never)
-        .mockResolvedValueOnce({ lat: '37.39', lng: '-6.00' } as never);
+      mockPipelineObj.exec.mockResolvedValue([
+        [null, { lat: 'bad', lng: 'bad' }],
+        [null, { lat: '37.39', lng: '-6.00' }],
+      ]);
 
       const result = await findConnectedFriendsFor(42);
 

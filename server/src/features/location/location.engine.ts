@@ -135,20 +135,37 @@ export async function findConnectedFriendsFor(userId: number): Promise<Connected
     },
   });
 
-  const friends: ConnectedFriend[] = [];
+  if (friendships.length === 0) {
+    return [];
+  }
+
+  const friendIds: number[] = [];
+  const pipeline = redis.pipeline();
   for (const f of friendships) {
     const friendId = f.userIdA === userId ? f.userIdB : f.userIdA;
-    const friendKey = `${SESSION_KEY_PREFIX}:${friendId}`;
-    const friendSession = await redis.hgetall(friendKey);
+    friendIds.push(friendId);
+    pipeline.hgetall(`${SESSION_KEY_PREFIX}:${friendId}`);
+  }
 
-    if (!friendSession || Object.keys(friendSession).length === 0) continue;
+  const results = await pipeline.exec();
+  if (!results) {
+    return [];
+  }
 
-    const friendLat = parseFloat(friendSession.lat);
-    const friendLng = parseFloat(friendSession.lng);
+  const friends: ConnectedFriend[] = [];
+  for (let i = 0; i < results.length; i++) {
+    const [err, friendSession] = results[i];
+    if (err) continue;
+
+    const session = friendSession as Record<string, string>;
+    if (!session || Object.keys(session).length === 0) continue;
+
+    const friendLat = parseFloat(session.lat);
+    const friendLng = parseFloat(session.lng);
     if (Number.isNaN(friendLat) || Number.isNaN(friendLng)) continue;
 
     friends.push({
-      userId: friendId,
+      userId: friendIds[i],
       latitude: friendLat,
       longitude: friendLng,
     });

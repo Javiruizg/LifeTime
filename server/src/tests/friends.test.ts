@@ -5,6 +5,7 @@ jest.mock('../shared/lib/redis', () => ({
     hset: jest.fn(),
     expire: jest.fn(),
     del: jest.fn(),
+    pipeline: jest.fn(),
   },
 }));
 
@@ -60,10 +61,16 @@ describe('Friends endpoints', () => {
   let userA: { token: string; userId: number };
   let userB: { token: string; userId: number };
   let userC: { token: string; userId: number };
+  const mockPipeline = {
+    exists: jest.fn().mockReturnThis(),
+    exec: jest.fn().mockResolvedValue([]),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    mockRedis.exists.mockResolvedValue(0);
+    mockRedis.pipeline.mockReturnValue(mockPipeline as never);
+    mockPipeline.exists.mockReturnThis();
+    mockPipeline.exec.mockResolvedValue([]);
     await cleanupUsers();
     userA = await createUser(DEVICE_A);
     userB = await createUser(DEVICE_B);
@@ -314,7 +321,7 @@ describe('Friends endpoints', () => {
         .post(`/api/friends/accept/${requests.body[0].id}`)
         .set('Authorization', `Bearer ${userB.token}`);
 
-      mockRedis.exists.mockResolvedValue(1);
+      mockPipeline.exec.mockResolvedValue([[null, 1]]);
 
       const response = await request(app)
         .get('/api/friends')

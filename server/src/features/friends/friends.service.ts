@@ -205,11 +205,28 @@ export async function getFriends(userId: number): Promise<Friend[]> {
     },
   });
 
+  const friendUsers = friendships.map((f) => (f.userIdA === userId ? f.userB : f.userA));
+
+  const pipeline = redis.pipeline();
+  for (const friendUser of friendUsers) {
+    pipeline.exists(`${SESSION_KEY_PREFIX}:${friendUser.id}`);
+  }
+
+  const results = await pipeline.exec();
+  const existsMap = new Map<number, boolean>();
+  if (results) {
+    for (let i = 0; i < results.length; i++) {
+      const [err, value] = results[i];
+      if (err) continue;
+      existsMap.set(friendUsers[i].id, (value as number) === 1);
+    }
+  }
+
   const friends: Friend[] = [];
-  for (const f of friendships) {
-    const friendUser = f.userIdA === userId ? f.userB : f.userA;
-    const sessionKey = `${SESSION_KEY_PREFIX}:${friendUser.id}`;
-    const isOnline = (await redis.exists(sessionKey)) === 1;
+  for (let i = 0; i < friendships.length; i++) {
+    const f = friendships[i];
+    const friendUser = friendUsers[i];
+    const isOnline = existsMap.get(friendUser.id) ?? false;
     friends.push({
       id: f.id,
       userId: friendUser.id,
